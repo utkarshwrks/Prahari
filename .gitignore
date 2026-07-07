@@ -1,0 +1,17 @@
+/node_modules
+/.next
+/out
+/build
+.env
+.env.local
+.env*.local
+*.tsbuildinfo
+next-env.d.ts
+.DS_Store
+npm-debug.log*
+/data/users.json
+__shot.mjs
+__*.mjs
+
+# local tooling
+.claude/settings.local.json

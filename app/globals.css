@@ -1,0 +1,360 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-anton: "Anton", Impact, sans-serif;
+  --font-grotesk: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-inter: "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  --black: #131318;
+  --panel: #1e1e25;
+  --panel-2: #2a2a32;
+  --border: #3a3a44;
+  --border-2: #4c4c58;
+  --white: #ffffff;
+  --text: #f4f4f5;
+  --muted: #b4b4be;
+  --muted-2: #8a8a96;
+  --red: #e10600;
+  --red-bright: #ff3b30;
+  --red-deep: #c11030;
+  --red-glow: rgba(225, 6, 0, 0.35);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+  background: var(--black);
+  color: var(--text);
+  font-family: var(--font-inter);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--red);
+  color: #fff;
+}
+
+/* =========================================================
+   BACKGROUND TEXTURE — grid + scanline + radial red glow
+   ========================================================= */
+.tactical-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-color: var(--black);
+  background-image:
+    radial-gradient(1000px 700px at 15% -5%, rgba(225, 6, 0, 0.1), transparent 55%),
+    radial-gradient(900px 600px at 100% 100%, rgba(225, 6, 0, 0.07), transparent 55%),
+    linear-gradient(rgba(255, 255, 255, 0.032) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.032) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 32px 32px, 32px 32px;
+}
+
+.scanline-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  overflow: hidden;
+}
+.scanline-overlay::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 160px;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    rgba(225, 6, 0, 0.045),
+    transparent
+  );
+  animation: scanline 9s linear infinite;
+}
+
+/* Faint global CRT scanlines */
+.crt-lines::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0) 0px,
+    rgba(0, 0, 0, 0) 2px,
+    rgba(0, 0, 0, 0.1) 3px
+  );
+  opacity: 0.18;
+}
+
+/* =========================================================
+   TACTICAL PRIMITIVES
+   ========================================================= */
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  position: relative;
+}
+
+/* Corner brackets — tactical [ ] frame on key panels */
+.brackets::before,
+.brackets::after {
+  content: "";
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-color: var(--red);
+  z-index: 2;
+  pointer-events: none;
+}
+.brackets::before {
+  top: -1px;
+  left: -1px;
+  border-top: 2px solid var(--red);
+  border-left: 2px solid var(--red);
+}
+.brackets::after {
+  bottom: -1px;
+  right: -1px;
+  border-bottom: 2px solid var(--red);
+  border-right: 2px solid var(--red);
+}
+
+/* mono section label */
+.label {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.hairline {
+  height: 1px;
+  background: var(--border);
+}
+.red-rule {
+  height: 2px;
+  background: linear-gradient(90deg, var(--red), transparent);
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-feature-settings: "tnum" 1;
+}
+.font-display {
+  font-family: var(--font-anton);
+}
+
+/* Slim scrollbar */
+.slim-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-2) transparent;
+}
+.slim-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.slim-scroll::-webkit-scrollbar-thumb {
+  background: var(--border-2);
+  border-radius: 0;
+}
+.slim-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 12px 22px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.16s ease;
+  white-space: nowrap;
+}
+.btn-primary {
+  background: var(--red);
+  color: #fff;
+  border-color: var(--red);
+}
+.btn-primary:hover {
+  background: var(--red-deep);
+  box-shadow: 0 0 24px var(--red-glow);
+}
+.btn-ghost {
+  background: transparent;
+  color: var(--text);
+  border-color: var(--border-2);
+}
+.btn-ghost:hover {
+  border-color: var(--red);
+  color: #fff;
+}
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Focus ring */
+.field {
+  width: 100%;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 14px;
+  padding: 12px 14px;
+  border-radius: 4px;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+.field::placeholder {
+  color: var(--muted-2);
+}
+.field:focus {
+  border-color: var(--red);
+  box-shadow: 0 0 0 1px var(--red-glow);
+}
+
+/* =========================================================
+   LEAFLET THEMING
+   ========================================================= */
+.leaflet-container {
+  background: var(--black) !important;
+  font-family: var(--font-mono);
+  outline: none;
+}
+/* Only brighten the (very dark) dark basemap; leave light/satellite/streets as-is. */
+.leaflet-container.grade-dark .leaflet-tile-pane {
+  filter: brightness(1.18) saturate(0.9) contrast(1.02);
+}
+.leaflet-container.grade-satellite .leaflet-tile-pane {
+  filter: saturate(1.05) contrast(1.03) brightness(0.95);
+}
+.leaflet-control-zoom a {
+  background: var(--panel) !important;
+  color: var(--muted) !important;
+  border-color: var(--border) !important;
+  border-radius: 0 !important;
+}
+.leaflet-control-zoom a:hover {
+  color: var(--red-bright) !important;
+}
+.leaflet-tooltip.prahari-tip {
+  background: var(--panel-2);
+  border: 1px solid var(--border-2);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  border-radius: 2px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6);
+}
+.leaflet-tooltip.prahari-tip::before {
+  display: none;
+}
+/* Dark-themed popups */
+.leaflet-popup-content-wrapper {
+  background: #1e1e25 !important;
+  color: #f4f4f5 !important;
+  border: 1px solid #3a3a44 !important;
+  border-radius: 4px !important;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6) !important;
+}
+.leaflet-popup-tip {
+  background: #1e1e25 !important;
+  border: 1px solid #3a3a44 !important;
+}
+.leaflet-popup-close-button {
+  color: #b4b4be !important;
+}
+.leaflet-container a.leaflet-popup-close-button:hover {
+  color: #ff3b30 !important;
+}
+
+.geofence-ring {
+  animation: geofencePulse 2.4s ease-in-out infinite;
+}
+@keyframes geofencePulse {
+  0%,
+  100% {
+    stroke-opacity: 0.5;
+    stroke-width: 1.5;
+  }
+  50% {
+    stroke-opacity: 1;
+    stroke-width: 3;
+  }
+}
+.siren {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 2px solid var(--c, #ff2a1f);
+  animation: sirenExpand 1.8s ease-out forwards;
+}
+@keyframes sirenExpand {
+  0% {
+    transform: scale(0.15);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+.map-marker-dot {
+  transition:
+    width 0.4s ease,
+    height 0.4s ease,
+    box-shadow 0.4s ease;
+}
+
+/* =========================================================
+   SONNER TOAST THEMING (red/black)
+   ========================================================= */
+[data-sonner-toaster] {
+  font-family: var(--font-mono);
+}
+[data-sonner-toast] {
+  background: var(--panel) !important;
+  border: 1px solid var(--red) !important;
+  border-radius: 4px !important;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6), 0 0 20px var(--red-glow) !important;
+  color: var(--text) !important;
+}
+[data-sonner-toast] [data-title] {
+  color: var(--red-bright) !important;
+  font-family: var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-size: 12px;
+}
+[data-sonner-toast] [data-description] {
+  color: var(--muted) !important;
+}
+
+/* util */
+.no-shift {
+  content-visibility: auto;
+}
