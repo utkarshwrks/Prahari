@@ -61,6 +61,12 @@ export function localExtract(text: string): Extracted {
 const GROQ_SYSTEM =
   "You are an NER engine. From the user text, return ONLY minified JSON with keys locations, contraband, crypto_wallets, handles. No prose.";
 
+// Groq decommissions models on a rolling basis, so the id is configurable and
+// the default is only a default. `llama-3.3-70b-versatile` (the v1 value) now
+// returns 404 model_not_found, which silently forced every request down the
+// local fallback. See DEC-013.
+const GROQ_MODEL = process.env.GROQ_MODEL?.trim() || "openai/gpt-oss-120b";
+
 async function groqExtract(text: string, apiKey: string): Promise<Extracted> {
   const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
@@ -69,7 +75,7 @@ async function groqExtract(text: string, apiKey: string): Promise<Extracted> {
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: "llama-3.3-70b-versatile",
+      model: GROQ_MODEL,
       temperature: 0,
       messages: [
         { role: "system", content: GROQ_SYSTEM },

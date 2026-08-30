@@ -101,3 +101,37 @@ The build machine defaults to Python 3.14.7. spaCy, PyTorch CPU, Splink and the 
 publish wheels for 3.14; a source build on CPU would cost hours and may fail outright. `engine/pyproject.toml`
 pins `requires-python = ">=3.11,<3.13"` and the environment is created with `uv`. Decided in Phase 1 so
 Phase 2 does not lose a day to it.
+
+### DEC-013 — Groq model id is configurable; the v1 default was decommissioned.
+**Deviation from the Phase 1 constraint "do not change any v1 behaviour except the emoji removal",
+recorded deliberately.**
+
+v1 hardcoded `llama-3.3-70b-versatile`. Groq has retired it — the endpoint now returns
+`404 model_not_found`. Because `analyze()` catches every Groq error and falls through to the local
+extractor (INV-3), the failure was invisible: the app reported `source: "local"` and looked healthy
+while the Groq path was dead. A valid key could never produce a Groq result.
+
+This is a defect, not a behaviour change: the intended behaviour ("use Groq when a key is present") was
+unreachable. Fixed rather than deferred because the key exists to make live testing possible, and a
+silent permanent fallback would have been discovered on stage.
+
+- `lib/extractor.ts` now reads `GROQ_MODEL`, defaulting to `openai/gpt-oss-120b`.
+- Verified end-to-end: `POST /api/analyze` returns `source: "groq"` for English and Hinglish input.
+- The honest-badge invariant is unaffected — the badge still reports the engine that actually ran.
+
+### FINDING-07 — Groq returns city names that the gazetteer cannot resolve.
+Surfaced while verifying DEC-013. On the Hinglish input
+`"bhai jbp aur katni mein delivery ho jayegi"`, Groq returns `locations: ["jbp", "katni"]` — lowercase,
+and `"jbp"` is a colloquial abbreviation absent from `lib/cities.ts`.
+
+`getCity()` lowercases its lookup so `"katni"` resolves, but `"jbp"` does not, and
+`registerCities()` skips any name `getAnyCity()` cannot resolve. The result is a **silently dropped
+in-zone mention**: the model correctly identified Jabalpur, and the geofence never saw it.
+
+The local extractor does not have this bug because it only ever emits exact gazetteer names — but it
+also never detects `"jbp"` at all. Neither path is correct today.
+
+Phase 3 must add a normalisation/alias layer between extraction and the gazetteer (`jbp`, `jblp`,
+`jabalpore`, Devanagari `जबलपुर`, etc.), and the extraction P/R table in `docs/METRICS.md` must measure
+recall *after* normalisation, not before. Not fixed in Phase 1 — it is Phase 3 scope and needs the
+Hinglish lexicon that phase introduces.
