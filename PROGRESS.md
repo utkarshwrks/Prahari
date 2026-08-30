@@ -4,7 +4,7 @@ The single source of truth for project status. Updated at the end of every phase
 
 ---
 
-## Last phase — 1: SYNC — 30 August 2026
+## Last phase — 1: SYNC — 30 August 2026 — automated + manual layers PASS
 
 Absorbed PRAHARI v1, audited it against the v2 blueprint, and established the operating contract.
 Nothing behavioural was built or changed.
