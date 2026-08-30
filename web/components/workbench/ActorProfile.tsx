@@ -8,6 +8,7 @@ import { api, type ActorProfile as Profile, type Timeline } from "@/lib/api";
 import Confidence from "../ui/Confidence";
 import Panel from "../ui/Panel";
 import ActorTimeline from "./ActorTimeline";
+import ActorGraphPanel from "./ActorGraphPanel";
 
 const IDENT_ICON: Record<string, typeof KeyRound> = {
   pgp: KeyRound, wallet: Wallet, email: Mail, onion: Globe,
@@ -77,6 +78,9 @@ export default function ActorProfileView({
 
         {p && (
           <div className="space-y-4">
+            {/* The graph is the anchor: the actor and its strongest ties, in 3D. */}
+            <ActorGraphPanel profile={p} onOpenPair={onOpenPair} />
+
             {/* Headline: who, and how sure. */}
             <header className="flex items-start justify-between gap-4">
               <div className="min-w-0">
