@@ -370,3 +370,55 @@ Seven tests, because this claim is the project's legal basis rather than a featu
 | **DEC-026** | — | **B-03 closed, better than assumed.** Shodan needs no key: `internetdb.shodan.io` is free and unauthenticated. `SHODAN_API_KEY` removed from the critical path — one fewer key for an on-prem deployment. |
 | **DEC-027** | Major | **crt.sh was DOWN: 0 of 5 attempts, all HTTP 502.** It carries the two strongest infra rules. Had the demo been built on it alone, the strongest evidence path would fail whenever crt.sh has a bad day. certspotter (free, keyless) is now primary with crt.sh as failover, and the response names which source answered. |
 | **DEC-028** | — | JARM actively probes TLS, so it runs only against hosts we control. The testbed leak resolves from planted metadata, keeping live probes off the demo's critical path entirely. |
+
+---
+
+## Phase 7 — EVIDENCE FUSION — 31 August 2026
+
+### Automated
+
+| Command | Result | Count |
+|---|---|---|
+| `uv run pytest` | **PASS** | **201 passed** (165 → 201) |
+| `npm test` | **PASS** | 57 passed |
+| Fusion tests | **PASS** | 36 |
+
+### Acceptance criteria
+
+| Criterion | Required | Measured |
+|---|---|---|
+| Deck example | 0.84 ± 0.01 | **0.839543** ✔ |
+| Naive baseline (noisy-OR) | 0.999 ± 0.001 | **0.999126** ✔ |
+| Decoy | ≤ 0.30 with negative listed | **0.000803**, `mimicry_suspected` ✔ |
+| `/fusion/threshold?alpha=0.05` | returns τ and count | τ **0.029851**, 93 links ✔ |
+| Trail reproduces `p_raw` | exactly | **yes**, all 300 sampled pairs ✔ |
+
+### Adversarial (D3.2) probes, run as tests
+
+1. **Same fact under two names** — three `infra` signals at s=0.83 collapse to exactly the
+   one-signal score. No double-counting.
+2. **Weak linguistic ceiling** — style alone at s=0.95 cannot exceed 0.75.
+3. **No invalid probability** — s ∈ {0, 1, 1e-12, 1−1e-12}, six roots at 0.999: always in (0,1),
+   never NaN, never 1.0.
+4. **Decoy above 0.30** — impossible; `mimicry_suspected` caps at 0.30 and it lands at 0.0008.
+5. **Recomputed false-merge rate at each α** — bound holds at 0.01 / 0.02 / 0.05 / 0.10 / 0.20.
+
+### Verdict
+
+**PASS on every acceptance criterion.**
+
+### Defects found and fixed
+
+| ID | Severity | Finding |
+|---|---|---|
+| **DEC-029** | **Critical** | **The conformal guarantee did not hold.** Isotonic outputs are piecewise constant; the quantile landed inside a tie block and admitted all of it. Measured false-merge rate **25.2% while the API reported a 5% guarantee**. τ now walks to the next distinct value until the bound genuinely holds, and returns `guarantee_holds: false` when none can. |
+| **DEC-031** | **Critical** | **The rebrand pair was unfindable by construction.** Deriving "candidate" from Splink blocking alone gave it the 1:10,000 unblocked prior, crushing it to **0.0003** — in the one case built specifically to be findable without a hard identifier. Now **0.2335**. |
+| **DEC-030** | Major | **The trail did not reproduce the score.** Factors published at 6 dp recomputed to 0.925596 against a `p_raw` of 0.925597. One digit, but reproducibility is the entire claim. Factors now at 12 dp. |
+| **DEC-032** | Major | `/fusion/threshold` computed τ on raw scores while `/fusion/pair` reported calibrated ones — two endpoints, two scales. |
+
+### Stated limitation
+
+Isotonic collapses this testbed's scores into few distinct steps, so τ has coarse resolution:
+α = 0.05 and α = 0.10 share a τ, and α = 0.01 is only honourable by accepting the 52 pairs scored at
+1.0. That is a limit of 1,336 validation pairs, not a defect, and Phase 9's threshold slider must not
+imply finer control than the data supports.

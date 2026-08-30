@@ -1,0 +1,106 @@
+{
+  "accepted_links": 93,
+  "alpha": 0.05,
+  "brier": 0.005333,
+  "calibration_engine": "isotonic",
+  "decoy": {
+    "cap_applied": 0.3,
+    "negatives": [
+      "mimicry_suspected"
+    ],
+    "p_raw": 0.000803,
+    "pair_id": "actor-000-p0|decoy"
+  },
+  "ece": 0.005083,
+  "f1": 0.9381,
+  "false_merge_rate": 0.031348,
+  "guarantee_holds": true,
+  "n_pairs": 3340,
+  "n_train": 2004,
+  "n_val": 1336,
+  "precision": 1.0,
+  "rebrand": {
+    "p_raw": 0.23349,
+    "pair_id": "rebrand-before|rebrand-after",
+    "roots": [
+      "financial",
+      "linguistic",
+      "temporal"
+    ]
+  },
+  "recall": 0.8833,
+  "reliability_bins": [
+    {
+      "bin": "(0.0,0.1]",
+      "gap": 0.0051,
+      "mean_confidence": 0.0106,
+      "n": 1283,
+      "observed_accuracy": 0.0055
+    },
+    {
+      "bin": "(0.1,0.2]",
+      "gap": null,
+      "mean_confidence": null,
+      "n": 0,
+      "observed_accuracy": null
+    },
+    {
+      "bin": "(0.2,0.3]",
+      "gap": null,
+      "mean_confidence": null,
+      "n": 0,
+      "observed_accuracy": null
+    },
+    {
+      "bin": "(0.3,0.4]",
+      "gap": null,
+      "mean_confidence": null,
+      "n": 0,
+      "observed_accuracy": null
+    },
+    {
+      "bin": "(0.4,0.5]",
+      "gap": null,
+      "mean_confidence": null,
+      "n": 0,
+      "observed_accuracy": null
+    },
+    {
+      "bin": "(0.5,0.6]",
+      "gap": null,
+      "mean_confidence": null,
+      "n": 0,
+      "observed_accuracy": null
+    },
+    {
+      "bin": "(0.6,0.7]",
+      "gap": null,
+      "mean_confidence": null,
+      "n": 0,
+      "observed_accuracy": null
+    },
+    {
+      "bin": "(0.7,0.8]",
+      "gap": 0.2212,
+      "mean_confidence": 0.7788,
+      "n": 1,
+      "observed_accuracy": 1.0
+    },
+    {
+      "bin": "(0.8,0.9]",
+      "gap": null,
+      "mean_confidence": null,
+      "n": 0,
+      "observed_accuracy": null
+    },
+    {
+      "bin": "(0.9,1.0]",
+      "gap": 0.0,
+      "mean_confidence": 1.0,
+      "n": 52,
+      "observed_accuracy": 1.0
+    }
+  ],
+  "seed": 42,
+  "tau": 0.029851
+}

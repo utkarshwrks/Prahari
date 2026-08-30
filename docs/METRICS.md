@@ -265,18 +265,56 @@ Burstiness across 244 personas: min 0.102, median 0.205, max 0.385.
 
 ## 7. Fusion & calibration — Phase 7
 
+Fixed seed 42, 3,340 pairs, 2,004 train / 1,336 validation. `python -m engine.fusion.eval`
+reproduces every figure; running it twice yields an identical diff.
+
 | Metric | Value |
 |---|---|
-| Precision @ τ(α=0.05) | |
-| Recall @ τ(α=0.05) | |
-| F1 @ τ(α=0.05) | |
-| **False-merge rate @ τ** | **must be ≤ α** |
-| Brier score | |
-| ECE (10 bins) | |
-| τ at α = 0.01 | |
-| τ at α = 0.05 | |
-| τ at α = 0.10 | |
-| Decoy pair `p_calibrated` | **must be ≤ 0.30** |
+| Precision @ τ(α=0.05) | **1.0000** |
+| Recall @ τ(α=0.05) | 0.8833 |
+| F1 @ τ(α=0.05) | **0.9381** |
+| **False-merge rate @ τ** | **0.0313 ≤ α = 0.05** ✔ |
+| Brier score | **0.005333** |
+| ECE (10 bins) | **0.005083** |
+| Accepted links @ τ | 93 |
+| **Decoy `p_raw`** | **0.000803** (cap 0.30, `mimicry_suspected` listed) |
+| **Rebrand `p_raw`** | **0.2335** — no `identity_key` root at all |
+
+### The worked example — the pitch
+
+| Root | Signal | s | LR | r | LR^r |
+|---|---|---|---|---|---|
+| identity_key | PGP fingerprint | 0.78 | 3.5455 | 0.9 | 3.1240 |
+| financial | shared wallet | 0.71 | 2.4483 | 0.7 | 1.8716 |
+| infra | cert reuse | 0.83 | 4.8824 | 0.8 | 3.5555 |
+| linguistic | writing style | 0.69 | 2.2258 | 0.5 | 1.4919 |
+| temporal | posting rhythm | 0.74 | 2.8462 | 0.5 | 1.6871 |
+
+`LR_total = 52.3219` · prior odds `1:10` · posterior odds `5.2322`
+
+| | |
+|---|---|
+| **PRAHARI** | **0.839543** → **0.84** |
+| **Naive noisy-OR** `1 − Π(1−sᵢ)` | **0.999126** → **0.999** |
+| **Gap** | **0.1596** |
+| Trail reproduces `p_raw` exactly | **yes** (12 dp, DEC-030) |
+
+### Conformal guarantee across risk budgets
+
+| α | τ | measured FMR | holds | accepted links |
+|---|---|---|---|---|
+| 0.01 | 1.000000 | 0.0000 | **yes** | 52 |
+| 0.02 | 1.000000 | 0.0000 | **yes** | 52 |
+| 0.05 | 0.029851 | 0.0313 | **yes** | 93 |
+| 0.10 | 0.029851 | 0.0313 | **yes** | 93 |
+| 0.20 | 0.029851 | 0.0313 | **yes** | 93 |
+
+Lower α gives a higher τ and fewer accepted links, and the bound holds at every α.
+
+**Stated limitation (DEC-029):** isotonic collapses these scores into few distinct steps, so τ has
+coarse resolution — α = 0.05 and α = 0.10 currently share a τ, and α = 0.01 is only honourable by
+accepting the 52 pairs scored at 1.0. That is a limit of 1,336 validation pairs, not a bug, and the UI
+slider must not imply finer control than the data supports.
 
 ---
 
