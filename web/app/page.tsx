@@ -2,7 +2,9 @@ import Link from "next/link";
 import {
   Fingerprint, GitBranch, Layers, Lock, Server, Sigma, Timer,
 } from "lucide-react";
-import Hero from "@/components/home/Hero";
+import GlobeStage from "@/components/three/GlobeStage";
+import NoiseField from "@/components/three/NoiseField";
+import Intro from "@/components/home/Intro";
 import Logo from "@/components/ui/Logo";
 
 // Every number here is measured and reproducible with
@@ -74,7 +76,59 @@ export default function Home() {
         </div>
       </nav>
 
-      <Hero metrics={METRICS} />
+      <Intro />
+
+      {/* Cinematic hero: the globe fills the right of the fold, content the left. */}
+      <section className="relative overflow-hidden">
+        <NoiseField />
+        <div className="absolute right-[-8%] top-1/2 hidden h-[120%] w-[62%] -translate-y-1/2 lg:block">
+          <GlobeStage />
+        </div>
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[var(--bg)] via-[var(--bg)]/70 to-transparent lg:via-transparent" />
+
+        <div className="relative mx-auto max-w-[1200px] px-5 pb-20 pt-24 sm:pt-32">
+          <p className="mono text-[10px] uppercase tracking-[0.24em] text-[var(--muted-2)]">
+            Smart India Hackathon 2026 · PS 26151 · NTRO
+          </p>
+          <h1 className="display mt-5 max-w-3xl text-4xl font-bold leading-[1.04] tracking-tight text-[var(--text)] sm:text-6xl">
+            Dark-web threat actors leave the same fingerprints{" "}
+            <span className="text-[var(--c-high)]">in public places.</span>
+          </h1>
+          <p className="mt-6 max-w-xl text-[15px] leading-relaxed text-[var(--muted)]">
+            A reused signing key. A wallet on two marketplaces. An onion whose TLS
+            certificate names a clearnet host. A writing habit that survives a
+            rebrand. PRAHARI collects those footprints, links the personas behind
+            them into one actor, and reports how confident it is — with a published
+            error rate and a record nobody can quietly edit.
+          </p>
+          <p className="mono mt-5 max-w-xl border-l-2 border-[var(--accent-dim)] pl-3 text-[11px] leading-relaxed text-[var(--muted)]">
+            We never touch Tor. We correlate what operators leaked themselves — and
+            prove it with a live timing attack on our own hidden service.
+          </p>
+
+          <div className="mt-8 flex flex-wrap items-center gap-3">
+            <Link href="/workbench"
+              className="mono group flex items-center gap-2 border border-[var(--accent-dim)] bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] px-5 py-2.5 text-[11px] uppercase tracking-[0.18em] text-[var(--c-high)] transition hover:bg-[color-mix(in_srgb,var(--accent)_24%,transparent)]">
+              Enter the workbench
+              <span className="transition-transform group-hover:translate-x-1">→</span>
+            </Link>
+            <Link href="/about"
+              className="mono border border-[var(--border-2)] px-5 py-2.5 text-[11px] uppercase tracking-[0.18em] text-[var(--muted)] transition hover:border-[var(--muted-2)] hover:text-[var(--text)]">
+              How it works
+            </Link>
+          </div>
+
+          <dl className="mt-16 grid max-w-2xl gap-px border border-[var(--border)] bg-[var(--border)] sm:grid-cols-4">
+            {METRICS.map((m) => (
+              <div key={m.label} className="bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] px-4 py-4 backdrop-blur">
+                <dd className="mono tnum text-2xl font-bold text-[var(--c-high)]">{m.value}</dd>
+                <dt className="mono mt-1 text-[9px] uppercase tracking-[0.14em] text-[var(--muted)]">{m.label}</dt>
+                <p className="mono mt-1 text-[9px] leading-relaxed text-[var(--muted-2)]">{m.note}</p>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </section>
 
       {/* Mandated capabilities */}
       <section className="border-t border-[var(--border)]">
