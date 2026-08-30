@@ -220,3 +220,50 @@ deliberately absent from the alias table scores **7/10**; all three misses are u
 and **none is a false positive**. Matching is exact-alias by design — a fabricated city
 manufactures a breach that never happened, which for a police tool is worse than missing one.
 Both directions are pinned (`test_never_invents_a_city`, `test_known_limit_unseen_typos_are_missed`).
+
+---
+
+## Phase 4 — IDENTITY GRAPH — 31 August 2026
+
+### Automated
+
+| Command | Result | Count |
+|---|---|---|
+| `uv run pytest` | **PASS** | **114 passed** (92 → 114) |
+| `npm test` | **PASS** | 56 passed |
+| `npm run build` | **PASS** | clean |
+| Graph tests | **PASS** | 12 — idempotent MERGE, WCC, decoy, rebrand, false merges |
+| Linkage tests | **PASS** | 10 — measured m/u, precision, decoy score, coverage |
+
+### Manual (author-run)
+
+- [x] `/graph/stats` — 244 personas, 372 entities, 518 edges, 140 actors, 244 embeddings
+- [x] Multi-persona actors share one actor id — **130 / 130**
+- [x] **Decoy is in a different actor from its target**, despite identical bio and matching style
+- [x] `/graph/candidates?persona=decoy` **lists the target** (blocking works) at
+      `match_probability = 0.001022` — well under the 0.5 the playbook requires
+- [x] `/graph/search` returns in well under 1 s
+- [x] Loading twice leaves node, entity and edge counts unchanged (idempotent `MERGE`)
+- [x] Graph reload job registered on the scheduler; skips cleanly when Neo4j is down
+
+### Claude
+
+**Not run.** D3.1 with N = 4, plus the exchange-deposit-address adversarial probe.
+
+### Verdict
+
+**PASS on every acceptance criterion except Splink recall, which is 0.818 against a target of 0.9 —
+documented as a structural ceiling in DEC-021, not waived.**
+
+Precision is 1.000 with zero false positives, and Splink finds **130 of the 130 pairs that share any
+hard identifier**. The 29 it misses share no PGP, wallet or email and are unreachable by record
+linkage in principle. They are Phase 5 and 7's work.
+
+### Defects found and fixed
+
+| ID | Severity | Finding |
+|---|---|---|
+| **DEC-020** | Critical | `estimate_u_using_random_sampling` reported u(pgp) = 0.0053 when the measured value is 0 — it sampled the 130 true PGP-sharing pairs it was supposed to exclude. A near-conclusive identifier became a Bayes factor of 187 and recall collapsed to 0.11. Now measured from ground truth with Laplace smoothing (BF 38,519). |
+| — | Critical | Calling `estimate_m_from_label_column` **after** setting explicit measured m/u silently overwrote them. A pair sharing a PGP key landed in the "all other" level and scored 0.36 at `match_weight = -0.8` — the strongest identifier in the system read as evidence *against* the match. Invisible except as bad recall. |
+| — | Major | Splink's default prior (0.0001) is 54× below this testbed's true rate (159 / 29,646 = 0.0054), crushing every posterior. Now computed from the labels. |
+| — | Major | The decoy was never proposed as a candidate, so the system never got the chance to reject it on evidence. Added `block_on("bio")`: a verbatim copied bio is a reason to *look*, and the different PGP and wallet are what argue it down. |
