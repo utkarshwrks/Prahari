@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -19,6 +19,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
+import { trapFocus } from "@/lib/a11y";
 import { useIntel, AlertStatus, AlertLogEntry } from "@/store/intel";
 import { useRecords } from "@/store/records";
 import { clockString, relativeTime } from "@/lib/time";
@@ -55,6 +56,13 @@ export default function NotificationCenter() {
   const [sevFilter, setSevFilter] = useState<"all" | "high" | "medium">("all");
   const [statusFilter, setStatusFilter] = useState<"all" | AlertStatus>("all");
   const [mounted, setMounted] = useState(false);
+  // Focus trap + Escape for the drawer (Phase 1 audit: v1 had neither).
+  const drawerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open || !drawerRef.current) return;
+    return trapFocus(drawerRef.current, () => setOpen(false));
+  }, [open]);
+
   useEffect(() => setMounted(true), []);
 
   const unread = alertLog.filter((a) => !a.read).length;
@@ -115,6 +123,10 @@ export default function NotificationCenter() {
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
               transition={{ type: "spring", stiffness: 320, damping: 34 }}
+              ref={drawerRef}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Alert notifications"
               className="fixed right-0 top-0 z-[901] flex h-full w-full max-w-[420px] flex-col border-l border-border bg-panel shadow-glow-lg"
             >
               {/* header */}

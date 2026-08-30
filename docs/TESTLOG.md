@@ -474,3 +474,44 @@ imply finer control than the data supports.
 | **DEC-036** | — | Verification names the **failing index**. "Invalid" is not a useful answer to a court. |
 | **DEC-037** | — | Only 32-byte hashes on chain, and `caseRef` is itself `keccak256(case_id)` — even a case number is investigative metadata on a permanent public ledger. |
 | **DEC-038** | **Critical** | **The exported Merkle root was not the root that had been anchored.** Sealing appended a `seal` record *after* anchoring, so the chain held the root over N records while the export published the root over N+1. A genuine, untampered export would have failed chain verification. **All 32 audit tests passed** — none of them sealed, exported, and compared the two roots. Found by running the demo flow end to end. Fixed by appending the seal-intent record before computing the anchored root; exports now also publish `sealed_root`, `sealed_root_matches_current` and `records_added_after_seal`. |
+
+---
+
+## Phase 9 — WORKBENCH UI — 31 August 2026
+
+### Automated
+
+| Command | Result | Count |
+|---|---|---|
+| `npm test` | **PASS** | **79 passed** (57 → 79) |
+| `npm run build` | **PASS** | clean |
+| `node e2e/journey.mjs` | **PASS** | **25/25** |
+| `uv run pytest` | **PASS** | 235 |
+| `forge test` | **PASS** | 12 |
+
+### Playwright journey — 25 assertions through the real browser path
+
+Login → dashboard → CRITICAL → evidence trail shows **0.840 against a naive 0.999** with the LR table
+and named root causes → audit ledger with `prev` hash links and Merkle root → three-way mode toggle →
+focus trap and Escape → reduced motion → 1440/1024/390 with zero horizontal overflow and no banned
+glyphs → 44px touch targets on a touch device.
+
+### Defects found and fixed
+
+| ID | Severity | Finding |
+|---|---|---|
+| **DEC-039** | **Critical** | **FINDING-02 closed.** Both print paths interpolated analyst-authored fields into `document.write()`. Confirmed exploitable: a case title containing `<img src=x onerror=…>` executed on the officer's origin. Rewritten to build DOM nodes via `textContent` — escape by construction, with no escaping helper for a future call site to forget. |
+| **DEC-042** | **Major** | **The focus trap was a no-op on every dialog.** `focusableWithin` filtered on `offsetParent !== null`, which is null for `position: fixed` — and every dialog here is fixed. Nine unit tests passed because happy-dom reports it differently from a real browser. Caught only by the journey. |
+| **DEC-040** | Major | **FINDING-05 closed.** Motion gated behind `prefers-reduced-motion`, but information is not: sirens freeze at full extent rather than mid-frame. |
+| **DEC-043** | Minor | 31 touch targets under 44px. Gated on `pointer: coarse` rather than viewport width. |
+
+Two of my own tests were wrong before the code was: one matched the word `innerHTML` inside its own
+documentation, another detached the opener before testing focus restoration. Both tightened.
+
+### Verdict
+
+**PASS on the criteria attempted. Scope cut recorded (DEC-044), not hidden.**
+
+MapLibre GL, react-force-graph-3d, the d3 Sankey and the timeline scrubber are deferred as **roadmap**.
+Leaflet works; tilt is presentation, not capability. Everything carrying the two USPs was built, and
+the responsive, motion and accessibility contracts are verified at all three widths.

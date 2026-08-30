@@ -40,5 +40,17 @@ export default function BreachToaster() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastBreach?.seq]);
 
-  return null;
+  // A geofence breach is the product's whole point, and a Sonner toast is
+  // rendered outside the a11y tree in a way screen readers routinely miss.
+  // This is a visually-hidden, assertive live region carrying the same words.
+  return (
+    <div
+      role="status"
+      aria-live="assertive"
+      aria-atomic="true"
+      className="sr-only"
+    >
+      {lastBreach ? `Geofence breach: ${lastBreach.city}. In-zone jurisdiction hit.` : ""}
+    </div>
+  );
 }

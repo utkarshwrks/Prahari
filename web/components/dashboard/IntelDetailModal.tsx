@@ -1,7 +1,8 @@
 "use client";
 
 import { createPortal } from "react-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { trapFocus } from "@/lib/a11y";
 import { toast } from "sonner";
 import { X, MapPin, FolderPlus, Radar, Flag, Bitcoin, AtSign, Clock as ClockIcon, ExternalLink, Radio, Check, AlertTriangle } from "lucide-react";
 import { Intercept } from "@/lib/mockIntel";
@@ -56,11 +57,26 @@ export default function IntelDetailModal({
     onClose();
   }
 
+  // Focus trap + Escape. v1 let Tab walk out of the open modal into the page
+  // behind it, and never announced the dialog to a screen reader.
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!dialogRef.current) return;
+    return trapFocus(dialogRef.current, onClose);
+  }, [onClose]);
+
   return createPortal(
-    <div className="fixed inset-0 z-[950] flex items-center justify-center p-4">
+    <div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Intercept detail"
+      className="fixed inset-0 z-[950] flex items-center justify-center p-4"
+    >
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
       <div className="panel brackets relative w-full max-w-md p-5">
-        <button onClick={onClose} className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center text-muted hover:text-text">
+        <button onClick={onClose} aria-label="Close intercept detail"
+          className="absolute right-2 top-2 flex h-9 w-9 items-center justify-center text-muted hover:text-text">
           <X className="h-4 w-4" />
         </button>
         <div className="flex items-center gap-2">

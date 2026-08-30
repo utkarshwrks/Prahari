@@ -17,6 +17,8 @@ import { useIntel } from "@/store/intel";
 import { CITIES } from "@/lib/cities";
 import { activityBuckets } from "@/lib/analytics";
 import { clockString } from "@/lib/time";
+import { toast } from "sonner";
+import { openReport } from "@/lib/report";
 
 type Tab = "records" | "analytics" | "reports";
 
@@ -383,21 +385,25 @@ function ReportsTab() {
   }
 
   function printReport() {
-    const rows = records.map((r) =>
-      `<tr><td>${r.id}</td><td>${r.title}</td><td>${r.city}</td><td>${r.category}</td><td>${r.severity.toUpperCase()}</td><td>${r.status}</td><td>${r.assignee}</td></tr>`
-    ).join("");
-    const html = `<!doctype html><html><head><title>PRAHARI Case Report</title>
-      <style>body{font-family:monospace;background:#fff;color:#111;padding:32px}
-      h1{color:#E10600}table{width:100%;border-collapse:collapse;margin-top:16px}
-      th,td{border:1px solid #ccc;padding:7px 10px;text-align:left;font-size:12px}
-      th{background:#f3f3f3;text-transform:uppercase}</style></head>
-      <body><h1>PRAHARI — CASE RECORDS REPORT</h1>
-      <div>MP Cyber Cell · Jabalpur · Generated ${new Date().toLocaleString()} · ${records.length} records · SYNTHETIC DATA</div>
-      <table><thead><tr><th>ID</th><th>Title</th><th>City</th><th>Category</th><th>Severity</th><th>Status</th><th>Assignee</th></tr></thead>
-      <tbody>${rows || '<tr><td colspan=7>No records</td></tr>'}</tbody></table>
-      <script>window.onload=()=>window.print()</script></body></html>`;
-    const w = window.open("", "_blank");
-    if (w) { w.document.write(html); w.document.close(); }
+    // FINDING-02: was template-interpolated HTML into document.write, which
+    // executed script from an analyst-authored case title. Now built as DOM
+    // nodes via textContent, which cannot produce markup.
+    const ok = openReport({
+      title: "PRAHARI - Case Records Report",
+      subtitle: "MP Cyber Cell . Jabalpur . SYNTHETIC DATA",
+      columns: [
+        { header: "ID", value: (r: CaseRecord) => r.id },
+        { header: "Title", value: (r: CaseRecord) => r.title },
+        { header: "City", value: (r: CaseRecord) => r.city },
+        { header: "Category", value: (r: CaseRecord) => r.category },
+        { header: "Severity", value: (r: CaseRecord) => r.severity.toUpperCase() },
+        { header: "Status", value: (r: CaseRecord) => r.status },
+        { header: "Assignee", value: (r: CaseRecord) => r.assignee },
+      ],
+      rows: records,
+      emptyMessage: "No case records",
+    });
+    if (!ok) toast.error("Your browser blocked the report window.");
   }
 
   return (
