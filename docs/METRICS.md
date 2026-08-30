@@ -140,22 +140,50 @@ Fail threshold: Splink recall **≥ 0.9** at `match_probability` 0.5 on labelled
 
 | Metric | Value |
 |---|---|
-| Splink precision @ 0.5 | |
-| Splink recall @ 0.5 | |
-| Blocking coverage | |
-| Actors formed (WCC) | |
-| Multi-persona case → one WCC | |
-| Decoy → separate WCC | |
+| Splink precision @ 0.5 | **1.0000** |
+| Splink recall @ 0.5 | **0.8176** |
+| F1 @ 0.5 | 0.8997 |
+| False positives | **0** |
+| Blocking coverage | 0.8868 |
+| Personas / entities / edges | 244 / 372 / 518 |
+| Actors formed (WCC) | 140 |
+| FastRP embeddings written | 244 |
+| Multi-persona pairs → one actor | **130 / 130 (100%)** |
+| Decoy → separate actor | **yes** |
+| Rebrand → separate actor | **yes** (by design) |
+| False merges over 3,180 unrelated pairs | **0** |
+| Decoy `match_probability` | **0.0010** (blocked, then rejected) |
 
-### Trained m/u probabilities
+### Measured m/u probabilities
 
-| Comparison column | m | u | Match weight |
+Measured from ground truth with Laplace smoothing, **not** estimated (DEC-020).
+`estimate_u_using_random_sampling` reported u(pgp) = 0.0053 because it sampled the true
+matches too; the measured value is 0.
+
+| Comparison | m = P(agree \| match) | u = P(agree \| non-match) | Bayes factor |
 |---|---|---|---|
-| handle (Jaro-Winkler) | | | |
-| contact set | | | |
-| wallet set | | | |
-| city set | | | |
-| category vector | | | |
+| PGP fingerprint | 0.6531 | 1.70e-05 | **38,519** |
+| Wallet | 0.4531 | 1.70e-05 | **26,724** |
+| Email | 0.0031 | 5.09e-05 | 61 |
+
+### Reading the 0.818 honestly
+
+The playbook's target is recall ≥ 0.90. Measured 0.8176, and **the ceiling is structural, not a
+tuning failure**: of 159 true pairs only **130 share any hard identifier**, and Splink finds
+**130 of 130**.
+
+| Framing | Value |
+|---|---|
+| Recall over pairs sharing a hard identifier | **1.000** |
+| Recall over all true pairs | 0.818 (ceiling 0.818) |
+| Precision | 1.000 |
+
+The 29 unreachable pairs share no PGP, no wallet and no email. They are exactly what Phase 5
+(stylometry, behaviour) and Phase 7 (fusion) exist to catch — an actor who rotated every hard
+identifier but kept their writing habits. The rebrand case is deliberately one of them.
+
+Raising the generator's identifier-sharing rate would push this past 0.9 while making the task
+strictly easier. See DEC-021.
 
 ---
 

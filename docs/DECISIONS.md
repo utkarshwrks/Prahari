@@ -208,3 +208,58 @@ The archives are daily crawls and therefore **do** carry timestamps, which is ex
 They are also a very large manual/torrent fetch. Phase 3 ships the loader against the documented format
 and a committed fixture; the full download is a Phase 10 nice-to-have, not a demo dependency.
 Recorded so the temporal gap in DEC-018 is understood as addressable, not inherent.
+
+---
+
+## Phase 4 — Identity Graph
+
+### DEC-020 — Splink m and u are MEASURED from ground truth, never estimated.
+`estimate_u_using_random_sampling` assumes true matches are rare enough to ignore. On this testbed they
+are not: it sampled all 29,646 pairs including the 130 that genuinely share a PGP key, and reported
+**u(pgp) = 0.0053 when the measured value is 0.0** — no non-matching pair shares a key at all. That
+contamination turned a near-conclusive identifier into a Bayes factor of 187, and recall collapsed to
+0.11.
+
+Measured with Laplace smoothing instead (u strictly positive, because an infinite Bayes factor drives
+the posterior to exactly 1.0 — neither numerically safe nor honest to report):
+
+| Field | m = P(agree \| match) | u = P(agree \| non-match) | Bayes factor |
+|---|---|---|---|
+| PGP fingerprint | 0.6531 | 0.0000170 | **38,519** |
+| Wallet | 0.4531 | 0.0000170 | **26,724** |
+| Email | 0.0031 | 0.0000509 | 61 |
+
+**No Splink training runs after these are set.** Calling `estimate_m_from_label_column` afterwards
+silently overwrote them, which put a PGP-sharing pair in the "all other" level and scored it 0.36 with
+`match_weight = -0.8` — the strongest identifier in the system read as evidence *against*. That failure
+was invisible except as bad recall.
+
+### DEC-021 — Splink recall is 0.818, and the ceiling is structural.
+The playbook's acceptance target is recall >= 0.9 at threshold 0.5. Measured: **0.818**, with
+**precision 1.000 and zero false positives**.
+
+The gap is not tuning. Of 159 true pairs, only **130 share any hard identifier**; Splink finds
+**130 of 130 — 100% of what exact matching can reach**. The remaining 29 pairs share no PGP, no wallet
+and no email, and are unreachable by record linkage in principle.
+
+Those 29 are not a defect. They are the pairs **Phase 5 (stylometry, behaviour) and Phase 7 (fusion)
+exist to catch** — an actor who rotated every hard identifier but kept their writing habits. The
+rebrand case is deliberately one of them.
+
+The honest pair of numbers to report, and the ones that go in the deck:
+
+- **Recall over pairs sharing a hard identifier: 1.000**
+- **Recall over all true pairs: 0.818** (ceiling 0.818 by construction)
+- **Precision: 1.000, false positives: 0**
+
+Raising the generator's identifier-sharing rate would push the headline past 0.9 while making the task
+strictly easier. That is fixing the slide instead of the source, and it is refused.
+
+### DEC-022 — Only hard identifiers form actors; wallet lineage stays soft.
+WCC runs over `SIGNED_WITH` and `PAID_TO` only. `CONTACT`, `VOUCHES_FOR`, `MENTIONS` and
+`FUNDS_FLOW_TO` are excluded, because a shared inbox, a rating link or a transfer between two distinct
+addresses is evidence of a relationship, not proof of one controller.
+
+Verified on the testbed: **0 false merges across 3,180 unrelated pairs**, the decoy stays in a
+different actor from its target despite an identical bio and matching style, and the rebrand pair stays
+separate so Phase 5 has something real to solve.

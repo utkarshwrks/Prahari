@@ -4,86 +4,84 @@ The single source of truth for project status. Updated at the end of every phase
 
 ---
 
-## Last phase — 3: DATA — 31 August 2026 — automated layer PASS
+## Last phase — 4: IDENTITY GRAPH — 31 August 2026 — automated layer PASS
 
-Real datasets, labelled testbed, deep extraction.
+Neo4j resolution and Splink linkage.
 
 **Shipped**
 
-- **Testbed** (`engine/testbed/generate.py`) — fixed-seed synthetic ground truth: 244 personas,
-  2,928 posts, 3,340 labelled pairs (**159 positive**, 20:1 capped negatives), all four cases
-  injected. The only labelled dataset in the project, so every metric comes from here.
-- **Extraction** (`engine/extract/`) — Python port of `extractor.ts`, extended with PGP fingerprints
-  via `pgpy`, onion v3, Monero, email, Telegram, and spaCy. INV-3 preserved: never raises, always
-  names the engine that ran.
-- **Normalisation** (`engine/extract/normalise.py`) — **FINDING-07 fixed.** 43 aliases across the MP
-  gazetteer; `jbp`, `jblp`, `जबलपुर`, `murwara` all resolve. Region terms (`MP`, `India`) explicitly
-  refuse to resolve to a city.
-- **Agora loader** (`engine/ingest/kaggle_agora.py`) — full 109,689-row load, 0 skipped, 3,192
-  personas, **1,832 bodies (1.67%) dropped** by the content blocklist, count reported not hidden.
-  1,000-row real fixture committed.
-- **DATASET feed** — `/feed` serves real Agora listings with extracted entities, explicitly flagged
-  `geofenced: false`.
-- **`/extract`** — mirrors v1's `/api/analyze` with the fuller engine.
-- **OSINT + chain adapters** — v1's three sources ported to Python; mempool.space (no key) and
-  Etherscan (degrades honestly without a key).
+- **Graph** (`engine/engines/graph.py`) — 244 personas, 372 entities, 518 typed weighted edges in
+  Neo4j. WCC over hard identifiers only forms 140 actors; Louvain communities; 244 FastRP embeddings.
+- **Linkage** (`engine/engines/linkage.py`) — Splink 4 on DuckDB, six blocking rules, m/u **measured
+  from ground truth** rather than estimated.
+- **Endpoints** — `/graph/stats`, `/actor/{id}`, `/persona/{id}`, `/search`, `/candidates`,
+  `/metrics`, `/reload`. All degrade honestly when Neo4j is down.
+- **Autonomous mode** — APScheduler graph-reload job every 10 min; skips cleanly when Neo4j is down.
 
-**Tests passing**
+**Results**
 
-| Command | Result |
+| Metric | Value |
 |---|---|
-| `npm test` | 56 passed |
-| `npm run build` | clean |
-| `uv run pytest` | **92 passed** (was 26) |
-| extraction P/R | English 1.000 / Hinglish 1.000 recall, thresholds 0.85 / 0.70 |
-| testbed determinism | same seed → identical digest |
-| end-to-end via proxy | `/feed` 1,000 items, `/extract` resolves `jbp` → Jabalpur |
-| engine killed | workbench fully alive, DATASET degrades honestly |
+| Precision @ 0.5 | **1.000** (0 false positives) |
+| Recall @ 0.5 | 0.818 — **130/130 of all reachable pairs** |
+| Multi-persona → one actor | 130 / 130 |
+| **Decoy → separate actor** | **yes**, despite identical bio and matching style |
+| **False merges over 3,180 unrelated pairs** | **0** |
+| Decoy `match_probability` | 0.0010 (blocked, then rejected on evidence) |
 
-**Honest note on the 1.000 extraction scores.** The labelled sentences and the alias table were
-authored together, so those figures are a regression guard, not a generalisation estimate. An
-independent probe of surface forms absent from the alias table scores **7/10**, with all three
-misses being unseen misspellings and **zero false positives**. Matching is deliberately
-exact-alias with no fuzzy fallback: a fabricated city manufactures a breach that never happened,
-which for a police tool is worse than missing one. Both directions are pinned by tests.
+**Tests:** 114 engine (was 92), 56 web, build clean.
 
-**Three findings recorded (DEC-018)** — measured on the real file before writing code: Agora has
-**no timestamps** (so the `temporal` root is testbed-only), **PGP in ~0.1% of rows** (so
-`identity_key` is testbed-driven), and **zero MP geography** (so the geofence stays a DEMO story).
-This maps onto the three-way toggle: DEMO carries the geofence, DATASET carries linkage and
-stylometry, the testbed carries every metric.
+**Two bugs that were invisible except as bad recall**
 
----
+1. **Contaminated u (DEC-020).** `estimate_u_using_random_sampling` assumes matches are rare; it
+   sampled all 29,646 pairs including the 130 sharing a PGP key and reported u(pgp)=0.0053 when the
+   measured value is 0. A near-conclusive identifier became a Bayes factor of 187 and recall collapsed
+   to 0.11. Now measured with Laplace smoothing: BF 38,519.
+2. **Training overwrote the measurement.** Calling `estimate_m_from_label_column` after setting
+   explicit m/u silently replaced them, putting a PGP-sharing pair in the "all other" level at
+   `match_weight = -0.8` — the strongest identifier in the system read as evidence *against*.
 
-## Current phase — 4: IDENTITY GRAPH — not started
-
-Splink blocking and Neo4j GDS resolution.
-
-**Objectives**
-
-1. `engine/engines/graph.py` — load personas, entities, posts into Neo4j. Typed weighted edges:
-   `SIGNED_WITH` 0.95, `PAID_TO` 0.80, `CONTACT` 0.70, `VOUCHES_FOR` 0.30, `MENTIONS` 0.20,
-   `LOCATED`. Idempotent `MERGE`.
-2. `engine/engines/linkage.py` — Splink on DuckDB. Blocking on shared PGP / wallet / email /
-   telegram / onion, Jaro-Winkler handle >= 0.9, same category with overlapping window. EM-trained
-   m/u exported to METRICS.
-3. GDS: WCC over hard identifiers → `Actor` super-nodes; Louvain; FastRP 128-d into pgvector.
-4. Endpoints `/graph/actor/{id}`, `/graph/candidates?persona=`, `/graph/search?q=`.
-5. APScheduler graph reload; `/sources` reports graph freshness.
-6. Tests: multi-persona → one WCC; **decoy → different WCC**; Splink recall >= 0.9 at 0.5.
-
-**Note carried from Phase 3:** the rebrand pair shares a wallet *lineage edge*, not an address,
-so WCC over hard identifiers must **not** merge it — that pair is reserved for Phase 5/7 to solve
-on style and timing. The decoy must likewise stay separate. Both are the real tests of objective 6.
+**Recall is 0.818, not the playbook's 0.9, and the ceiling is structural (DEC-021).** Only 130 of 159
+true pairs share any hard identifier. The other 29 are unreachable by record linkage in principle and
+are exactly what Phases 5 and 7 exist to catch. Raising the generator's sharing rate would clear 0.9
+while making the task easier — refused.
 
 ---
 
-## Next phase — 5: STYLOMETRY & BEHAVIOUR
+## Current phase — 5: STYLOMETRY & BEHAVIOUR — not started
 
 Authorship verification, counter-deception, rebrand detection.
 
-**Prerequisites from Phase 4:** personas resolved into actors with per-persona post corpora
-available, and the decoy and rebrand pairs surfaced as candidates for scoring.
+**Objectives**
+
+1. `engine/engines/stylometry.py` — TF-IDF char 3–5-grams, 150 function words, TTR, punctuation
+   habits, **Hinglish markers**, LaBSE embeddings. Cosine → `s_style`.
+2. `engine/engines/behaviour.py` — posting-hour and weekday histograms (IST), inter-post intervals.
+   Jensen–Shannon → `s_time`.
+3. Siamese char-CNN in PyTorch (CPU). If training exceeds 30 min, fall back to a classic-features
+   logistic model and record the cut.
+4. Counter-deception: copied-bio detector (Jaccard > 0.9 → `mimicry_suspected`, caps `s_style` at
+   0.2); LLM-rewrite detector (burstiness + typo rate → `s_style` weight 0.3).
+5. Rebrand detection with `ruptures` change-point on daily activity.
+6. Endpoints `/style/compare`, `/behaviour/compare`, `/rebrand/candidates`.
+7. Tests: true pairs > decoy pairs on mean `s_style`; decoy emits `mimicry_suspected`; rebrand
+   detected; all endpoints degrade to classic features when model weights are absent.
+
+**What Phase 4 handed over, and why it matters here**
+
+The **29 true pairs sharing no hard identifier** are unreachable by linkage and are now Phase 5's
+job — including the rebrand pair, which was deliberately built with distinct wallets joined by a
+lineage edge. The **decoy** must stay rejected: it will score HIGH on style by construction, so
+`mimicry_suspected` is what has to catch it. Phase 5 is where the two cases invert.
+
+---
+
+## Next phase — 6: INFRASTRUCTURE FINGERPRINTING
+
+Passive onion → clearnet matching via crt.sh, Shodan (cache-only without a key), JARM.
+
+**Prerequisites from Phase 5:** style and behaviour signals written to the `signals` table with root
+labels, so Phase 6's infra signals join the same schema ahead of fusion in Phase 7.
 
 ---
 
@@ -111,7 +109,7 @@ full tables.
 | False-merge rate @ τ(α=0.05) | pending — Phase 7 |
 | Brier / ECE | pending — Phase 7 |
 | **Extraction P/R** | **EN 1.000 / HI 1.000 recall** (regression guard; 7/10 on unseen forms, 0 false positives) |
-| Splink P/R | pending — Phase 4 |
+| **Splink P/R** | **P=1.000 R=0.818** (130/130 reachable, 0 false positives) |
 | **Fusion worked example** | **0.8395 → 0.84** (verified Phase 1) |
 | **Naive noisy-OR baseline** | **0.9991 → 0.999** (verified Phase 1) |
 
