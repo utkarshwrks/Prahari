@@ -31,18 +31,28 @@ echo "PRAHARI - demo launcher"
 echo "-----------------------"
 
 # 1. Datastores.
-if docker compose ps --format '{{.Name}}' 2>/dev/null | grep -q prahari-postgres; then
+# Container names are fixed, so check the daemon directly rather than
+# `docker compose ps`, which is scoped to a project name.
+if docker ps --filter name=prahari-postgres --filter status=running -q | grep -q .; then
   say "postgres/neo4j" "already up"
 else
-  docker compose up -d >/dev/null 2>&1
+  if ! docker compose up -d >/dev/null 2>&1; then
+    say "postgres/neo4j" "FAILED - is Docker running?"
+    exit 1
+  fi
   say "postgres/neo4j" "starting"
 fi
+HEALTHY=0
 for _ in $(seq 1 60); do
   pg=$(docker inspect --format '{{.State.Health.Status}}' prahari-postgres 2>/dev/null || echo none)
   n4=$(docker inspect --format '{{.State.Health.Status}}' prahari-neo4j 2>/dev/null || echo none)
-  [ "$pg" = healthy ] && [ "$n4" = healthy ] && break
+  if [ "$pg" = healthy ] && [ "$n4" = healthy ]; then HEALTHY=1; break; fi
   sleep 2
 done
+if [ "$HEALTHY" -ne 1 ]; then
+  say "datastores" "NOT HEALTHY after 120s - see: docker compose logs"
+  exit 1
+fi
 say "datastores healthy" "$(docker inspect --format '{{.State.Health.Status}}' prahari-postgres 2>/dev/null)"
 
 # 2. Local chain. Sepolia is the public chain; Anvil keeps the demo alive

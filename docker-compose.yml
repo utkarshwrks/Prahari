@@ -1,4 +1,15 @@
 # PRAHARI v2 - local infrastructure.
+#
+# The project name is PINNED. Docker Compose otherwise derives it from the
+# directory, so a fresh clone into any folder not named "prahari" gets a
+# different project, does not see the running stack, and tries to start a
+# second one -- which then collides with the fixed container_name values.
+#
+# Found by the Phase 11 fresh-clone run: `npm run demo` hung for 142s from a
+# clone at /tmp/final/P (project name "p"). A judge cloning into any directory
+# name would have hit exactly that.
+name: prahari
+
 # Everything here is free and open source: Neo4j Community with the free GDS
 # plugin, and PostgreSQL with pgvector. No licences, no cloud, no keys.
 #
