@@ -4,6 +4,7 @@ import { useState } from "react";
 import ActorList from "./ActorList";
 import ActorProfileView from "./ActorProfile";
 import AuditPanel from "./AuditPanel";
+import TimingPanel from "./TimingPanel";
 import EvidenceTrail from "./EvidenceTrail";
 import Header from "./Header";
 
@@ -36,6 +37,9 @@ export default function Workbench() {
         <div className="slim flex min-h-0 min-w-0 flex-col gap-2 xl:overflow-y-auto">
           <div className="min-h-[460px] shrink-0">
             <EvidenceTrail pairId={pairId} />
+          </div>
+          <div className="min-h-[300px] shrink-0">
+            <TimingPanel />
           </div>
           <div className="min-h-[380px] shrink-0">
             <AuditPanel />

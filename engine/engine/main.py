@@ -20,7 +20,7 @@ from starlette.requests import Request
 
 from .logging_config import configure_logging
 from .routers import (actors, audit, extract, feed, fusion, graph, health, infra,
-                      sources, style)
+                      sources, style, tor)
 from .scheduler import start_scheduler, stop_scheduler
 from .settings import get_settings
 
@@ -107,6 +107,7 @@ def create_app() -> FastAPI:
     app.include_router(fusion.router)
     app.include_router(audit.router)
     app.include_router(actors.router)
+    app.include_router(tor.router)
     return app
 
 

@@ -43,6 +43,8 @@ export const api = {
     }),
   sources: () => call<SourcesResult>("sources"),
   version: () => call<VersionResult>("version"),
+  torStart: (n = 24) => call<TorStatus>(`tor/experiment?n=${n}`, { method: "POST" }),
+  torStatus: () => call<TorStatus>("tor/status"),
   extract: (text: string) =>
     call<ExtractResult>("extract", {
       method: "POST",
@@ -164,6 +166,16 @@ export interface VersionResult {
   service: string; version: string; environment: string;
   capabilities: Record<string, { enabled: boolean; detail: string }>;
 }
+export interface TorResult {
+  confidence: number; peak_lag_ms: number; pearson: number;
+  n_client: number; n_service: number; matched: number; bin_ms: number; detail: string;
+}
+export interface TorStatus {
+  ok: boolean; state: string; transport: string; onion: string | null;
+  bootstrap_pct: number; client_events: number[]; service_events: number[];
+  result: TorResult | null; detail: string;
+}
+
 export interface ExtractResult {
   ok: boolean; source: string;
   entities: Record<string, string[]>;

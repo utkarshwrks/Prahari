@@ -20,7 +20,7 @@ const ALLOWED = [
   "health", "version", "sources", "extract",
   "actors", "actor", "export",
   "graph", "fusion", "audit",
-  "infra", "chain",
+  "infra", "chain", "tor",
   "feed", "style", "behaviour", "rebrand", "compare",
 ];
 
