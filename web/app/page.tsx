@@ -107,7 +107,7 @@ export default function Home() {
           </p>
 
           <div className="mt-8 flex flex-wrap items-center gap-3">
-            <Link href="/workbench"
+            <Link href="/login"
               className="mono group flex items-center gap-2 border border-[var(--accent-dim)] bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] px-5 py-2.5 text-[11px] uppercase tracking-[0.18em] text-[var(--c-high)] transition hover:bg-[color-mix(in_srgb,var(--accent)_24%,transparent)]">
               Enter the workbench
               <span className="transition-transform group-hover:translate-x-1">→</span>
