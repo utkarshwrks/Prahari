@@ -422,3 +422,50 @@ argument for Phases 5 and 6 existing.
 `thresholds()` computed τ over raw scores while `evaluate()` used calibrated ones, so the two endpoints
 published thresholds in different units. An analyst comparing a pair's score against the published τ
 would have been comparing different things. `ensure_calibrated()` now guarantees both are calibrated.
+
+---
+
+## Phase 8 — Immutable Audit
+
+### DEC-033 — B-02 resolved. Foundry 1.8.1 installed; `forge test` is 12/12.
+`PrahariAnchor.sol` compiled with solc 0.8.36. Deployed to local Anvil and exercised end to end:
+seal → verify → tamper → verify. Measured `anchor()` gas: **95,232** (the playbook estimated ~70k;
+the difference is the `Seal` struct carrying `caseRef` and `anchorer`, which is worth the extra gas
+because it makes the on-chain record self-describing).
+
+### DEC-034 — `explorer_url` is derived from the CONNECTED chain id, never from configuration.
+The Anvil fallback exists so the demo survives a dead network. That makes it dangerous: a Sepolia
+explorer link shown for an Anvil transaction is a **fabricated evidence trail** — precisely the
+opposite of what this layer is for, and worse than having no fallback at all.
+
+`is_public_chain` and `explorer_url` are therefore computed from `w3.eth.chain_id` as reported by the
+node it actually connected to. Chain ids 31337 and 1337 return `None` for the URL and the label
+`LOCAL CHAIN`, regardless of what `.env` claims. Verified live: a real Anvil seal returns
+`explorer_url=None` and `"Sealed to a LOCAL chain. This is not a public anchor."`
+
+This is D3.3 objective 5, and it is enforced by parametrised tests over every local chain id.
+
+### DEC-035 — Merkle promotes an odd node instead of duplicating it.
+Duplicating the final node when a level has odd length is the CVE-2012-2459 shape: two **distinct**
+leaf sets can then produce the same root, so a proof for one set verifies against the other. For an
+evidence structure that is a forgery primitive.
+
+Odd nodes are promoted unchanged. Regression-tested: `root([a,b,c]) != root([a,b,c,c])`.
+
+### DEC-036 — Verification names the failing index, and `seq` gaps are themselves evidence.
+"Invalid" is not a useful answer to a court. `/audit/verify` walks the chain and reports **which**
+record failed and why.
+
+`seq` is validated against position, so deleting a middle record is caught even before the hash check.
+The sophisticated attack — delete, relink `prev_hash`, renumber `seq` — is still caught, because each
+record's stored hash was computed over its **original** `prev_hash` and cannot be recomputed to match.
+Tested as D3.3 attack 2b.
+
+### DEC-037 — Only 32-byte hashes go on chain, and the case reference is hashed too.
+`anchor(bytes32 root, bytes32 caseRef, uint32 leafCount)`. `caseRef` is `keccak256(case_id)`, not the
+identifier itself — a public chain is permanent and world-readable, and even a case number is
+investigative metadata. No handle, wallet, name or listing text ever reaches the chain.
+
+Re-anchoring an existing root reverts (`AlreadyAnchored`). Allowing it would let an operator overwrite
+an earlier seal's timestamp, which is exactly the backdating the chain exists to prevent — and it is
+what makes D3.3 objective 4 (replaying another case's seal) fail closed.

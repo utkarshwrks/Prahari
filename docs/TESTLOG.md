@@ -422,3 +422,54 @@ Isotonic collapses this testbed's scores into few distinct steps, so τ has coar
 α = 0.05 and α = 0.10 share a τ, and α = 0.01 is only honourable by accepting the 52 pairs scored at
 1.0. That is a limit of 1,336 validation pairs, not a defect, and Phase 9's threshold slider must not
 imply finer control than the data supports.
+
+---
+
+## Phase 8 — IMMUTABLE AUDIT — 31 August 2026
+
+### Automated
+
+| Command | Result | Count |
+|---|---|---|
+| `uv run pytest` | **PASS** | **233 passed** (201 → 233) |
+| `forge test` | **PASS** | **12 passed**, 0 failed |
+| `npm test` | **PASS** | 57 passed |
+| Audit tests | **PASS** | 32, of which 7 are D3.3 attacks |
+
+### Manual (author-run) — the full demo flow against a live Anvil chain
+
+- [x] Confirm a link → ledger shows the record with `prev_hash` and a valid Ed25519 signature
+- [x] Seal → tx `0x27e5418…`, **block 3, gas 95,232**, chain id 31337
+- [x] Export JSON, CSV, PDF — each carries `merkle_root`, `tx_hash`, `chain_id`
+- [x] Edit one field in the exported JSON → **RED at failing index 2**, "content was altered"
+- [x] Restore → **GREEN**
+- [x] Single-record inclusion proof (3 siblings) → **GREEN**; altered proof → **RED**
+- [x] `forge test` passes; a second `anchor()` with the same root **reverts**
+- [x] **Wi-Fi-independent:** the whole flow ran against local Anvil with a visible LOCAL CHAIN badge
+
+### D3.3 — attacker with full database write access, without the analyst key
+
+| # | Attack | Outcome |
+|---|---|---|
+| 1 | Modify an `audit_records` row in place | **detected at index 2** |
+| 2 | Delete a middle record | **detected** — `seq` gap is itself evidence |
+| 2b | Delete, relink `prev_hash` **and** renumber `seq` | **still detected** — the stored hash was computed over the original `prev_hash` |
+| 3 | Re-sign with a different key | **detected** — key not registered to that analyst |
+| 4 | Replay a valid seal from another case | **reverts on chain** (`AlreadyAnchored`) |
+| 5 | Show a Sepolia explorer link for an Anvil tx | **impossible** — derived from the connected chain id, not config |
+
+**Zero undetected attacks.**
+
+### Verdict
+
+**PASS on every acceptance criterion.**
+
+### Findings
+
+| ID | Severity | Finding |
+|---|---|---|
+| **DEC-033** | — | B-02 resolved. Foundry 1.8.1. Measured `anchor()` gas **95,232** against the playbook's ~70k estimate — the difference is the `Seal` struct carrying `caseRef` and `anchorer`, which makes the on-chain record self-describing. `docs/METRICS.md` records the measured figure, not the estimate. |
+| **DEC-034** | **Critical (prevented)** | `explorer_url` is derived from the **connected** chain id, never from configuration. A Sepolia link on an Anvil transaction would be a fabricated evidence trail — worse than having no fallback. Enforced by parametrised tests over every local chain id. |
+| **DEC-035** | Major (prevented) | Merkle **promotes** an odd node rather than duplicating it. Duplication is the CVE-2012-2459 shape, where two distinct leaf sets share a root — a forgery primitive in an evidence structure. |
+| **DEC-036** | — | Verification names the **failing index**. "Invalid" is not a useful answer to a court. |
+| **DEC-037** | — | Only 32-byte hashes on chain, and `caseRef` is itself `keccak256(case_id)` — even a case number is investigative metadata on a permanent public ledger. |

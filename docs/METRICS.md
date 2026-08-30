@@ -342,4 +342,5 @@ slider must not imply finer control than the data supports.
 | `/graph/search` response | < 1 s | |
 | Horizontal overflow @ 1440 / 1024 / 390 | 0 | |
 | Cold demo start → step 7 | < 3 min | |
-| `anchor()` gas | ≈ 70k | |
+| `anchor()` gas (measured on Anvil) | ≈ 70k | **95,232** |
+
