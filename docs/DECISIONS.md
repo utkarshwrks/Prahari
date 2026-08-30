@@ -372,3 +372,53 @@ that already hold the data. We read an index; we never touch the target.
 
 **No code path may issue a request to a `.onion` host.** This is enforced by a network-layer test, not
 by convention.
+
+---
+
+## Phase 7 — Evidence Fusion
+
+### DEC-029 — The conformal threshold must handle ties, or the guarantee is a lie.
+Isotonic regression outputs are piecewise constant, so calibrated scores clump into steps. The textbook
+split-conformal quantile `negatives[ceil((n+1)(1-α)) - 1]` can land **inside a block of identical
+values**, and taking that value as τ admits the entire block.
+
+Measured consequence at α = 0.05: **false-merge rate 25.2%** while the API reported a 5% guarantee.
+A guarantee that does not hold is worse than no guarantee, because it is stated with confidence and
+a court would rely on it.
+
+τ now walks up to the next distinct value until the bound is genuinely met, and returns 1.0 with an
+explicit `guarantee_holds: false` when no threshold can bound the rate. Verified across
+α ∈ {0.01, 0.02, 0.05, 0.10, 0.20}: the bound holds at every one, τ decreases monotonically with α,
+and the accepted-link count increases monotonically.
+
+**Known coarseness, stated rather than hidden:** isotonic collapses this testbed's scores into few
+distinct steps, so τ has poor resolution — α = 0.05 and α = 0.10 currently yield the same τ, and
+α = 0.01 can only be honoured by accepting the 52 pairs scored at 1.0. That is a real limitation of
+calibrating on 1,336 validation pairs, not a bug, and the slider must not imply finer control than the
+data supports.
+
+### DEC-030 — The trail publishes 12 decimal places, because 6 did not reproduce.
+`reproduce_from_trail()` recomputed **0.925596** where `p_raw` was **0.925597** — accumulated rounding
+across factors that were published at the display precision.
+
+One unit in the last published place is still a published number that does not reproduce, and
+"every number in the trail must be reproducible from the API output" is a Phase 7 constraint and a
+D3.2 objective. An opposing expert recomputing from the exhibit and getting a different digit is
+exactly the opening that discredits the rest. Factors now carry 12 dp; `roots_used` stays at 6 dp for
+reading.
+
+### DEC-031 — Candidate generation is not only Splink.
+The prior is 1:10 for a pair that reached our attention and 1:10,000 otherwise. Deriving "reached our
+attention" from Splink's blocking alone gave the **rebrand pair the 1:10,000 prior and crushed it to
+0.0003** — unfindable by construction, in the one case built specifically to be findable without a
+hard identifier.
+
+The rebrand detector is a candidate generator in its own right. A pair proposed by **any** legitimate
+generator earns the blocked prior. The rebrand pair now scores **0.2335** on `financial` (wallet
+lineage) + `linguistic` + `temporal`, with **no `identity_key` root at all** — which is the entire
+argument for Phases 5 and 6 existing.
+
+### DEC-032 — `/fusion/threshold` and `/fusion/pair` report on the same scale.
+`thresholds()` computed τ over raw scores while `evaluate()` used calibrated ones, so the two endpoints
+published thresholds in different units. An analyst comparing a pair's score against the published τ
+would have been comparing different things. `ensure_calibrated()` now guarantees both are calibrated.

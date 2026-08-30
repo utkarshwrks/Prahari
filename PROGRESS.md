@@ -4,85 +4,79 @@ The single source of truth for project status. Updated at the end of every phase
 
 ---
 
-## Last phase — 6: INFRASTRUCTURE FINGERPRINTING — 31 August 2026 — automated layer PASS
+## Last phase — 7: EVIDENCE FUSION — 31 August 2026 — automated layer PASS
 
-Passive onion → clearnet matching. Nothing here connects to Tor or scans a host.
+**The USP.** All six roots fused into one calibrated, guaranteed, reproducible number.
 
 **Shipped**
 
-- **`engine/engines/infra.py`** — Certificate Transparency with failover, Shodan InternetDB, favicon
-  mmh3, header-order fingerprint, JARM guarded behind explicit ownership.
-- **Rule table** — all six playbook strengths, with **max** aggregation, never a sum.
-- **Testbed infra-leak** — resolves to the planted domain at **0.95** with five evidence lines, from
-  planted metadata, so the demo never depends on a third-party index being up.
-- **Endpoints** — `/infra/pivot`, `/infra/certificates`, `/infra/host`, `/infra/sources`.
-- **Passivity enforcement** — `assert_not_onion()` on every outbound URL, plus a network-layer test
-  that spies on `socket.getaddrinfo` and asserts no `.onion` resolution is ever attempted.
+- **`fusion/score.py`** — LR per signal, **root-cause collapse** (max per root), reliability
+  dampening, must-not-link caps, full reproducible trail.
+- **`fusion/calibrate.py`** — isotonic calibration, Brier, ECE with bin table, **split-conformal**
+  threshold with finite-sample correction.
+- **`fusion/eval.py`** — real signals from every prior engine; idempotent, fixed-seed.
+- **Endpoints** — `/fusion/model`, `/example`, `/pair/{id}`, `/threshold`, `/thresholds`, `/metrics`,
+  `POST /feedback`.
 
-**Two blockers resolved by measurement, both in the project's favour**
+**Acceptance**
 
-1. **B-03 closed, and better than assumed (DEC-026).** Shodan needs **no key at all**:
-   `internetdb.shodan.io` is free and unauthenticated and returns ports, hostnames, CPEs, tags and
-   vulns. `SHODAN_API_KEY` is off the critical path entirely — one fewer key, one fewer account for an
-   on-prem deployment.
-2. **crt.sh was DOWN — 0/5 attempts, all HTTP 502 (DEC-027).** It carries the 0.95 and 0.85 rules.
-   certspotter is also free and keyless, returned 100 certificates throughout, and is now primary;
-   crt.sh is automatic failover. `/infra/sources` names which source actually answered.
-
-**Results**
-
-| Check | Value |
-|---|---|
-| Testbed leak → planted domain | **0.95**, 5 evidence lines |
-| Decoy host, shared nginx banner only | **0.40** |
-| Live CT on a real public domain | **100 certificates** via certspotter |
-| Shodan InternetDB, no key | ports + hostnames returned |
-| Cache hit rate on repeat | 0.50 |
-| **Outbound `.onion` requests** | **0** |
-
-**Tests:** 165 engine (was 139), 57 web, build clean.
-
----
-
-## Current phase — 7: EVIDENCE FUSION, CALIBRATION, CONFORMAL GUARANTEE — not started
-
-**The phase that decides whether the project wins.** All five signal roots now exist.
-
-**Objectives**
-
-1. `engine/fusion/score.py` — `LR = s/(1-s)`; group by root; **max LR per root**; `Π LR_root^r`;
-   prior odds 1:10 blocked / 1:10,000 otherwise; must-not-link caps.
-2. Unit test reproducing **0.84** from the deck example and **0.999** from the naive baseline —
-   which is **noisy-OR**, `1 − Π(1−sᵢ)`, not an LR product (DEC-003, settled in Phase 1).
-3. `calibrate.py` — isotonic regression, Brier, ECE, reliability-diagram JSON.
-4. Split-conformal: threshold τ for risk budget α, `/fusion/threshold?alpha=`.
-5. `eval.py` — precision, recall, F1, false-merge at τ, Brier, ECE; writes METRICS.
-6. `POST /fusion/feedback` — analyst verdict updates negatives and re-scores.
-7. `/fusion/pair/{id}`, `/fusion/actor/{id}`.
-
-**Signals available to fuse**
-
-| Root | Source | Status |
+| Criterion | Required | Measured |
 |---|---|---|
-| `identity_key` | Splink PGP/email match | Phase 4 |
-| `financial` | shared wallet, lineage edges | Phase 4 |
-| `infra` | onion → clearnet pivot | Phase 6 |
-| `linguistic` | `s_style` with mimicry caps | Phase 5 |
-| `temporal` | `s_time`, rebrand candidates | Phase 5 |
-| `social` | handle similarity, vouches | Phase 4 |
+| Deck example | 0.84 ± 0.01 | **0.839543** |
+| Naive baseline | 0.999 ± 0.001 | **0.999126** |
+| Decoy | ≤ 0.30, negative listed | **0.000803**, `mimicry_suspected` |
+| False-merge rate | ≤ α | **0.0313 ≤ 0.05** |
+| Trail reproduces `p_raw` | exactly | **yes** |
+| Precision / F1 | — | **1.0000 / 0.9381** |
+| Brier / ECE | — | **0.0053 / 0.0051** |
 
-**The two cases fusion must get right:** the **decoy** must land ≤ 0.30 with its negative listed, and
-the **rebrand** pair must clear threshold on linguistic + temporal + financial-lineage alone, since
-neither has a hard identifier.
+**Four bugs, each of which would have survived a demo and failed under scrutiny**
+
+1. **DEC-029 — the guarantee did not hold.** Isotonic outputs are piecewise constant; the conformal
+   quantile landed inside a tie block and admitted all of it. **Measured false-merge rate 25.2% while
+   the API reported a 5% guarantee.** A guarantee that does not hold is worse than none.
+2. **DEC-031 — the rebrand pair was unfindable by construction.** Deriving "candidate" from Splink
+   alone gave it the 1:10,000 prior and crushed it to **0.0003** — in the one case built to be findable
+   without a hard identifier. Now **0.2335** on lineage + style + timing.
+3. **DEC-030 — the trail did not reproduce.** Published at 6 dp, recomputation gave 0.925596 against a
+   `p_raw` of 0.925597. One digit, but the whole claim is reproducibility.
+4. **DEC-032 — two endpoints, two scales.** `/fusion/threshold` reported τ on raw scores while
+   `/fusion/pair` reported calibrated ones.
+
+**Tests:** 201 engine (was 165), 57 web.
 
 ---
 
-## Next phase — 8: IMMUTABLE AUDIT
+## Current phase — 8: IMMUTABLE AUDIT — not started
 
 Hash chain, Ed25519 signatures, Merkle roots, Sepolia anchoring with Anvil fallback.
 
-**Prerequisites from Phase 7:** the canonical JSON serialisation of `PairScore`, and the list of
-analyst actions that must be hashed.
+**Objectives**
+
+1. `audit/ledger.py` — canonical JSON, keccak-256, `hash_n = keccak(prev_hash ‖ leaf_n)`, Ed25519
+   signatures verified on read.
+2. `audit/merkle.py` — per-case tree, root, single-record inclusion proofs.
+3. `anchor/` — Foundry: `PrahariAnchor.sol`, `anchor(root, caseRef, leafCount)`, `onlyAnchorer`,
+   double-anchor revert.
+4. `audit/anchor.py` — `EvmAnchorProvider`, Sepolia default, **Anvil fallback with a visible LOCAL
+   CHAIN badge, never silent**.
+5. Endpoints `/audit/case/{id}/ledger`, `/seal`, `/audit/verify`.
+6. Export `.json` / `.csv` / `.pdf` embedding root, tx hash, chain id and per-record proofs.
+7. Tests: tamper detection at the failing index, signature verification, Merkle round-trip,
+   `forge test` (double anchor reverts, non-anchorer reverts), end-to-end seal→verify on Anvil.
+
+**Blocker:** B-02 — Foundry is not installed. `curl -L https://foundry.paradigm.xyz | bash && foundryup`
+
+**Handed over from Phase 7:** `PairScore` canonical serialisation, and the analyst actions that must be
+hashed (confirm, reject, assign, note, seal, export).
+
+---
+
+## Next phase — 9: WORKBENCH UI
+
+3D graph, tilted MapLibre map, evidence-trail Sankey, audit panel, exports, responsive.
+
+**Prerequisites from Phase 8:** all endpoint contracts the panels consume, with example payloads.
 
 ---
 
@@ -108,9 +102,9 @@ full tables.
 
 | Metric | Value |
 |---|---|
-| Precision / Recall / F1 @ τ | pending — Phase 7 |
-| False-merge rate @ τ(α=0.05) | pending — Phase 7 |
-| Brier / ECE | pending — Phase 7 |
+| **Precision / Recall / F1 @ τ** | **1.0000 / 0.8833 / 0.9381** |
+| **False-merge rate @ τ(α=0.05)** | **0.0313 ≤ 0.05** ✔ |
+| **Brier / ECE** | **0.005333 / 0.005083** |
 | **Extraction P/R** | **EN 1.000 / HI 1.000 recall** (regression guard; 7/10 on unseen forms, 0 false positives) |
 | **Splink P/R** | **P=1.000 R=0.818** (130/130 reachable, 0 false positives) |
 | **Fusion worked example** | **0.8395 → 0.84** (verified Phase 1) |
