@@ -617,3 +617,43 @@ features described as roadmap rather than done.
 
 A slide claiming something the running system cannot do is the fastest way to lose the room, because
 the demo is right there.
+
+---
+
+## Phase 11 — Release Gate
+
+### DEC-050 — The dependency manifest was incomplete, and only a fresh clone could show it.
+`engine/pyproject.toml` declared the ten Phase 2 dependencies. Phases 3–8 added sixteen more —
+pandas, pyarrow, duckdb, pgpy, spacy, neo4j, splink, scikit-learn, scipy, ruptures, mmh3, pynacl,
+eth-hash, pycryptodome, web3, reportlab — with ad-hoc `uv pip install`. They worked perfectly on the
+build machine and existed nowhere else.
+
+A fresh clone failed with **`ModuleNotFoundError`: 26 failed, 15 errors**. That is precisely what a
+judge's laptop and the CI runner would have seen, and no amount of testing on the development machine
+could have surfaced it. Now declared and verified: **236/236 on a clean venv**.
+
+### DEC-051 — The production secret guard must not break the build.
+`next build` runs with `NODE_ENV=production`, so DEC-045's import-time check fired during the **build**
+and failed it on any machine without a secret — CI, and any judge following the README.
+
+A build authenticates nobody; a running server does. Refusing to boot is correct; refusing to build is
+over-reach that makes the honest thing — checking secrets — look like a broken repository. The build
+phase is exempted via `NEXT_PHASE`, and the runtime guard is unchanged. Both behaviours verified in
+isolation and regression-tested.
+
+### DEC-052 — The gate is a CONDITIONAL PASS, and that is the honest verdict.
+Nine of twelve release-gate objectives pass mechanically, including the two defects above.
+**371 tests are green on a genuinely fresh clone.**
+
+Three cannot be certified by the author:
+
+- **Manual checklists by two teammates who did not write the phase.** Every manual layer in
+  `docs/TESTLOG.md` is author-run. That satisfies the checklist mechanically and not its intent.
+- **D3.1 Claude review with N = ALL**, which explicitly requires "an independent reviewer, not the
+  author".
+- **A Sepolia anchor.** The contract, its twelve tests and the whole seal → verify → tamper flow are
+  real and exercised end to end, but only against local Anvil. Nothing is on a public chain.
+
+Marking those PASS would be exactly the failure this phase exists to catch, in the phase that exists to
+catch it. `v2.0-sih` is not tagged. The stop rule stands: anything not passing is described as roadmap,
+never demoed as working.

@@ -93,8 +93,8 @@ describe("production hardening is wired, not just documented", () => {
     // one is split across a string concatenation) and proves nothing about
     // behaviour. Setting NEXTAUTH_SECRET to the dev default is the subtler
     // mistake and must also be refused.
-    expect(src).toMatch(/IS_PRODUCTION && configured === DEV_SECRET/);
-    expect(src).toMatch(/if \(IS_PRODUCTION\) \{[\s\S]*?throw new Error/);
+    expect(src).toMatch(/IS_PRODUCTION && !IS_BUILD_PHASE && configured === DEV_SECRET/);
+    expect(src).toMatch(/if \(IS_PRODUCTION && !IS_BUILD_PHASE\) \{[\s\S]*?throw new Error/);
   });
 
   it("the demo account is gated on NODE_ENV, not on a comment", async () => {
@@ -117,5 +117,44 @@ describe("production hardening is wired, not just documented", () => {
     // Returning a distinct error would confirm which accounts exist.
     expect(src).toMatch(/return null;/);
     expect(src).toMatch(/which accounts exist/);
+  });
+});
+
+describe("the production guard does not break the build", () => {
+  it("exempts the Next build phase explicitly", async () => {
+    const fs = await import("fs");
+    const src = fs.readFileSync("lib/authConfig.ts", "utf8");
+    // Caught by the Phase 11 fresh-clone run: `next build` sets
+    // NODE_ENV=production, so the import-time guard failed the build on any
+    // machine without a secret -- CI, and any judge following the README.
+    // A build authenticates nobody; a running server does.
+    expect(src).toMatch(/NEXT_PHASE === "phase-production-build"/);
+    expect(src).toMatch(/IS_PRODUCTION && !IS_BUILD_PHASE/);
+  });
+
+  it("still refuses at runtime, which is the case that matters", async () => {
+    const fs = await import("fs");
+    const src = fs.readFileSync("lib/authConfig.ts", "utf8");
+    // The runtime path must remain a throw, not a warning.
+    expect(src).toMatch(/if \(IS_PRODUCTION && !IS_BUILD_PHASE\) \{[\s\S]*?throw new Error/);
+  });
+});
+
+describe("the dependency manifest is complete", () => {
+  it("declares every module the engine imports", async () => {
+    const fs = await import("fs");
+    const toml = fs.readFileSync("../engine/pyproject.toml", "utf8");
+    // Phase 11 fresh-clone run: these were installed ad-hoc during Phases 3-8
+    // and worked only on the build machine. A fresh clone failed with
+    // ModuleNotFoundError on 26 tests.
+    for (const dep of [
+      "pandas", "pyarrow", "duckdb", "pgpy", "spacy",
+      "neo4j", "splink",
+      "scikit-learn", "scipy", "ruptures",
+      "mmh3",
+      "pynacl", "eth-hash", "pycryptodome", "web3", "reportlab",
+    ]) {
+      expect(toml).toContain(dep);
+    }
   });
 });

@@ -4,79 +4,70 @@ The single source of truth for project status. Updated at the end of every phase
 
 ---
 
-## Last phase — 8: IMMUTABLE AUDIT — 31 August 2026 — automated layer PASS
+## Last phase — 11: MASTER TESTING — 31 August 2026 — CONDITIONAL PASS
 
-Court-grade chain of custody.
+Nothing was built. The system was attacked and had to hold.
 
-**Shipped**
+**The gate earned its place: the first fresh clone FAILED.**
 
-- **`audit/ledger.py`** — canonical JSON, keccak-256 (Solidity-compatible), hash chain
-  `hash_n = keccak(prev ‖ leaf)`, Ed25519 signing and verification, closed action set.
-- **`audit/merkle.py`** — per-case tree with **odd-node promotion**, root, single-record inclusion
-  proofs.
-- **`anchor/PrahariAnchor.sol`** — Foundry project, solc 0.8.36, `onlyAnchorer`, double-anchor
-  revert, `Anchored` event. **`forge test` 12/12.**
-- **`audit/anchor.py`** — `EvmAnchorProvider` with Sepolia default and **visible** Anvil fallback.
-- **Endpoints** — ledger, record, seal, proof, verify, and `.json` / `.csv` / `.pdf` export.
-
-**Verified end to end against a live Anvil chain**
-
-| Step | Result |
+| Objective | Result |
 |---|---|
-| Seal | ok, chain 31337, block 3, **gas 95,232** |
-| `explorer_url` on local chain | **None** — no fabricated Sepolia link |
-| Export → verify | **GREEN**, root matches |
-| Tamper one byte → verify | **RED at index 2**, "content was altered" |
-| Restore → verify | **GREEN** |
-| Single-record inclusion proof | verifies with 3 siblings; altered proof rejected |
+| 1. Fresh-machine run | **failed first** (`ModuleNotFoundError`, 26 tests) → fixed → **236/236** |
+| 2. Full suite on that clone | 98 web · 236 engine · 12 Solidity · 25 e2e, build clean |
+| 4. Metrics reproduction | two runs **byte-identical**; every figure verbatim in METRICS, landing, DECK |
+| 6. Offline drill | entire critical path runs with no external network |
+| 7. Failure drill | 4 kills, all honest; Postgres and Neo4j **healed without restart** |
+| 9. Security sweep | **11/11** |
+| 10. Global-rule sweep | **10/10** |
+| `npm run demo` on a fresh clone | **12 s** (budget 180 s) |
 
-**D3.3 threat model — attacker with full database write access, without the analyst key**
+**Two Major defects, both invisible on the development machine**
 
-| Attack | Outcome |
-|---|---|
-| Modify a record in place | detected at the index |
-| Delete a middle record | detected — `seq` gap is evidence |
-| Delete, relink `prev_hash` **and** renumber `seq` | **still detected** |
-| Re-sign with a different key | detected — key not registered to that analyst |
-| Reorder records | detected |
-| Replay another case's seal | reverts on chain (`AlreadyAnchored`) |
-| Show a Sepolia link for an Anvil tx | **impossible** — derived from the connected chain id |
+- **DEC-050** — the dependency manifest declared only Phase 2's packages. Sixteen added ad-hoc across
+  Phases 3–8 worked locally and existed nowhere else. A fresh clone could not run the engine.
+- **DEC-051** — Phase 10's production guard fired during `next build`, failing the build on any machine
+  without a secret. A build authenticates nobody. Build phase exempted; runtime guard unchanged.
 
-**Tests:** 233 engine (was 201), 12 Solidity, 57 web.
+**Not certified by the author (DEC-052)**
+
+- Manual checklists by two independent teammates — every manual layer here is author-run
+- D3.1 Claude review with N = ALL, which requires a reviewer who is not the author
+- A Sepolia anchor — the flow is real and exercised, but only on local Anvil
+
+`v2.0-sih` is **not tagged**.
 
 ---
 
-## Current phase — 9: WORKBENCH UI — not started
+## Current phase — SIH FINALE
 
-PC-first, phone-safe, instrument-grade, no emojis.
+**Three things stand between here and a full PASS. None is code.**
 
-**Objectives**
+1. **D3.1 review in a fresh session** (N = ALL), plus D3.2–D3.5. Must return PASS with zero Critical.
+2. **Two teammates run the Part D2 manual checklists** for Phases 8, 9 and 10 — people who did not
+   write them.
+3. **Either anchor a case on Sepolia** and record the address and tx hash in `docs/QA.md`, **or** say
+   "Sepolia-ready, demonstrated on a local chain" on stage and show the LOCAL CHAIN badge doing its job.
 
-1. MapLibre GL replacing Leaflet: 60° pitch, extruded city-heat columns, animated geofence rings,
-   same `lastPulse.seq` siren contract, actor operating footprint.
-2. `panels/ActorGraph.tsx` — react-force-graph-3d over `/graph/actor/{id}`, Sigma 2D fallback below
-   768 px, timeline scrubber.
-3. `panels/EvidenceTrail.tsx` — d3 Sankey signals → roots → score, LR table, negatives as red flags,
-   reliability diagram, **conformal threshold slider** (must not imply finer resolution than
-   DEC-029 supports).
-4. `panels/AuditLedger.tsx` — live hash chain, Merkle tree, Seal button → tx card with **LOCAL CHAIN
-   badge**, Verify drop-zone → green/red with failing index.
-5. `panels/WalletFlow.tsx`, `IntelDetailModal` "find linked personas".
-6. `RecordsModal` CSV + PDF via the engine; **replace both `document.write` sites** (FINDING-02).
-7. Motion behind `prefers-reduced-motion`; focus trap, Escape, `aria-live`.
-8. Responsive: ≥1280 three columns, 768–1279 two, <768 stacked; touch targets ≥44 px; zero
-   horizontal overflow.
-9. Playwright journey: login → DATASET → actor → trail shows 0.84 → seal → verify green → tamper → red.
+**Then tag `v2.0-sih`.**
 
-**Carried debt now due:** FINDING-02 (two `document.write` sites), FINDING-05 (no
-`prefers-reduced-motion` anywhere).
+**Run sheet for the presenter**
+
+```
+npm run demo          # ~12s, everything in order
+open http://localhost:3000
+login officer@mp.gov.in / prahari123
+follow docs/DEMO.md   # seven steps, two minutes
+```
+
+The one slide that matters: **0.84 against a naive 0.999.** Everything else supports it.
 
 ---
 
-## Next phase — 10: LANDING, DEMO HARDENING, DOCS, METRICS
+## Next phase — POST-HACKATHON ROADMAP
 
-**Prerequisites from Phase 9:** the list of copy strings on landing/about/docs that still describe
-v1-only behaviour.
+Gwern DNM archives (real timestamps, closing the temporal gap), MapLibre tilted map, 3D actor graph,
+d3 Sankey, timeline scrubber, Siamese authorship model, MuRIL Hinglish NER, shared-store rate limiting
+for multi-instance deployment.
 
 ---
 
