@@ -91,12 +91,29 @@ jobs:
           echo "clean"
 
       # Passivity rule: PRAHARI never connects to a hidden service.
-      - name: No outbound .onion
+      #
+      # Scoped to SOURCE, not tests. engine/tests/test_infra.py deliberately
+      # contains .onion URLs as fixtures asserting that assert_not_onion()
+      # refuses them -- flagging those would punish the very tests that prove
+      # the rule holds. The runtime guarantee is enforced separately by a
+      # network-layer test that spies on socket.getaddrinfo during a full
+      # pivot and asserts zero .onion resolutions are attempted.
+      - name: No outbound .onion in source
         run: |
-          if grep -rnE "https?://[a-z2-7]{16,56}\.onion" \
-               --include='*.ts' --include='*.tsx' --include='*.py' . ; then
-            echo "::error::Outbound .onion reference (passivity rule)"; exit 1
+          if grep -rnE "https?://[^[:space:]\"')]*\.onion" \
+               --include='*.ts' --include='*.tsx' --include='*.py' \
+               engine/engine web/app web/components web/lib web/store ; then
+            echo "::error::Outbound .onion reference in source (passivity rule)"; exit 1
           fi
+          echo "clean"
+
+      # The guard itself must exist and be wired in.
+      - name: Passivity guard is present
+        run: |
+          grep -q "def assert_not_onion" engine/engine/engines/infra.py || {
+            echo "::error::assert_not_onion() is missing"; exit 1; }
+          grep -q "OnionRequestBlocked" engine/engine/engines/infra.py || {
+            echo "::error::OnionRequestBlocked is missing"; exit 1; }
           echo "clean"
 
       # Secrets must never be committed. .env.local is gitignored; the example
