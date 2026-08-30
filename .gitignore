@@ -46,3 +46,6 @@ __*.mjs
 
 # demo launcher logs
 .demo-logs/
+
+# funded anchorer keys — never commit
+.secrets/
