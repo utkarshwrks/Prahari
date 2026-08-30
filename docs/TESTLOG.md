@@ -267,3 +267,53 @@ linkage in principle. They are Phase 5 and 7's work.
 | — | Critical | Calling `estimate_m_from_label_column` **after** setting explicit measured m/u silently overwrote them. A pair sharing a PGP key landed in the "all other" level and scored 0.36 at `match_weight = -0.8` — the strongest identifier in the system read as evidence *against* the match. Invisible except as bad recall. |
 | — | Major | Splink's default prior (0.0001) is 54× below this testbed's true rate (159 / 29,646 = 0.0054), crushing every posterior. Now computed from the labels. |
 | — | Major | The decoy was never proposed as a candidate, so the system never got the chance to reject it on evidence. Added `block_on("bio")`: a verbatim copied bio is a reason to *look*, and the different PGP and wallet are what argue it down. |
+
+---
+
+## Phase 5 — STYLOMETRY & BEHAVIOUR — 31 August 2026
+
+### Automated
+
+| Command | Result | Count |
+|---|---|---|
+| `uv run pytest` | **PASS** | **139 passed** (114 → 139) |
+| `npm test` | **PASS** | 56 passed |
+| `npm run build` | **PASS** | clean |
+| Stylometry tests | **PASS** | 25 |
+
+### Manual (author-run)
+
+- [x] `/style/compare` on a true pair scores higher than on unrelated pairs (0.594 vs 0.531)
+- [x] **Decoy response contains `mimicry_suspected`** and is capped at 0.200, while its raw
+      char-n-gram similarity is 0.827 — the cap is recognition of imitation, not blindness to it
+- [x] **Decoy (0.200) < rebrand (0.843)** — the inversion relative to Phase 4
+- [x] `/rebrand/candidates` lists the testbed case at rank 1 with the correct death (2026-02-10) and
+      birth (2026-02-15) dates, gap 5 days, wallet lineage true
+- [x] LLM-rewrite detector validated against genuinely flattened text (burstiness 0.000 → flagged)
+      while genuine personas are not (4.5% false positive rate)
+- [x] Endpoints degrade to classic features when no model is available; badge reports `classic`
+- [x] `/style/profile` reports Hinglish ratio, honorific rate and burstiness
+
+### Claude
+
+**Not run.** D3.1 with N = 5, plus the adversarial "copy formatting only" probe.
+
+### Verdict
+
+**PASS — automated and manual layers green. Independent review outstanding.**
+
+### Defects found and fixed
+
+| ID | Severity | Finding |
+|---|---|---|
+| **DEC-025** | **Critical** | Mimicry was measured over the full post corpus instead of bios. The decoy's verbatim-copied bio was one line in thirteen and diluted below threshold, so the decoy scored **s_style 0.914 — higher than genuine pairs — with no flag raised**. The most important negative case in the testbed was passing as the strongest positive. Fixed by profiling bios separately; k drops to 3 shingles for short texts. |
+| **DEC-024** | Major | The LLM-rewrite detector used an absolute burstiness threshold that fired on **206 of 244 personas (84%)** — templated text is inherently flat, which says nothing about machine rewriting. Now relative to the corpus's 5th percentile, and abstains entirely without a reference corpus. False positives 84% → 4.5%. |
+| **DEC-023** | — | Siamese char-CNN cut per the playbook's documented fallback, for reasons beyond the time budget: 244 personas of templated text would train it to memorise the generator, and a network cannot publish coefficients. Logistic model: AUC 0.7976. |
+
+### Note on the reported separation
+
+Mean `s_style` separation is **+0.0628** (true 0.594 vs unrelated 0.531) — positive, as required, but
+narrow. That is expected and correct: the testbed generates from a small template vocabulary, so all
+personas read somewhat alike, and stylometry is the weakest evidence in the system by design. It
+carries reliability 0.5 in fusion, half a PGP key's. The number to trust here is not the separation
+but the **direction of the two cases**: decoy 0.200 against rebrand 0.843.

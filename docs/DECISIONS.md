@@ -263,3 +263,75 @@ addresses is evidence of a relationship, not proof of one controller.
 Verified on the testbed: **0 false merges across 3,180 unrelated pairs**, the decoy stays in a
 different actor from its target despite an identical bio and matching style, and the rebrand pair stays
 separate so Phase 5 has something real to solve.
+
+---
+
+## Phase 5 — Stylometry & Behaviour
+
+### DEC-023 — Siamese char-CNN cut; the playbook's documented logistic fallback is taken.
+Phase 5 objective 3 allows reducing to "the classic-features logistic model" if CPU training of the
+Siamese network exceeds 30 minutes, provided the decision is recorded. It is taken, for reasons beyond
+the time budget:
+
+- **The data cannot support it.** 244 personas x 12 templated posts is far too little text to train a
+  two-tower char-CNN without memorising the generator's templates. It would score well on the testbed
+  and mean nothing.
+- **PyTorch CPU adds ~2 GB** to a demo that must cold-start in under three minutes.
+- **Explainability is the product.** A logistic model publishes its coefficients; a char-CNN does not.
+  "The network said 0.9" is not defensible in court, which is the whole argument of this project.
+
+The fallback is implemented as a real trained model, not a stub: logistic regression over eight
+pairwise features, stratified 70/30 split, seed 42.
+
+| Metric | Value |
+|---|---|
+| ROC AUC | 0.7976 |
+| Accuracy | 0.7068 |
+| Train / test pairs | 445 / 191 |
+
+Learned coefficients, which are themselves a finding:
+
+| Feature | Weight |
+|---|---|
+| `char_ngram` | **+3.4000** |
+| `hinglish_diff` | **-3.0039** |
+| `punct_cosine` | +1.7887 |
+| `honorific_diff` | -0.4257 |
+| `ttr_diff` | -0.3281 |
+
+**The Hinglish ratio is the second-strongest feature in the model.** A difference in romanised-Hindi
+usage argues strongly against shared authorship. That is direct evidence the Hinglish markers earn
+their place rather than being decoration for an Indian-jurisdiction pitch, and it is the empirical
+case for MuRIL in the roadmap.
+
+Roadmap, not "done": the Siamese model is revisited only if real multi-market corpora with genuine
+per-author volume become available.
+
+### DEC-024 — The LLM-rewrite detector is RELATIVE, and abstains without a reference corpus.
+An absolute burstiness threshold does not work, and the measurement is unambiguous: across 244 testbed
+personas, sentence-length coefficient of variation ranges 0.102-0.385 with a median of 0.205. The
+initial `burstiness < 0.25` rule fired on **206 of 244 personas (84%)**. Templated text is inherently
+flat; that says nothing about whether a machine rewrote it.
+
+"Flat" is only meaningful against a reference. The detector now flags a persona only when it sits below
+the **5th percentile of its own corpus** and shows a near-zero typo rate, and **abstains entirely when
+no corpus is supplied** — an unvalidatable flag that downweights real evidence is worse than no flag.
+
+| | Before | After |
+|---|---|---|
+| False positives on genuine personas | 206 / 244 (84%) | **11 / 244 (4.5%)** |
+| Catches genuinely flattened text | — | **yes** (burstiness 0.000) |
+| Behaviour with no reference corpus | fired anyway | **abstains** |
+
+### DEC-025 — Mimicry is detected on BIOS, not the whole corpus.
+The playbook specifies "Jaccard on bio shingles > 0.9". Applied to a persona's full post corpus instead,
+the decoy's verbatim-copied bio is one line against twelve listings and dilutes below any sane
+threshold: the decoy scored **s_style 0.914 — higher than genuine pairs — with no flag raised**. The
+single most important negative case in the testbed passed as the strongest positive.
+
+Bios are now profiled separately from post text and compared directly, with shingle size dropping to
+k=3 for short texts so Jaccard does not collapse to all-or-nothing on exactly the inputs that matter.
+
+Result: decoy **s_style 0.2000** (capped), flagged `mimicry_suspected`, against rebrand **0.8432**.
+Its raw character-n-gram similarity is still 0.827 — the decoy genuinely does read like its target,
+which is the point. The cap is the system recognising imitation rather than being fooled by it.
