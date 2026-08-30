@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import {
-  AlertTriangle, Copy, Download, ExternalLink, Fingerprint, Globe, KeyRound, Mail, Server, Wallet,
+  AlertTriangle, Copy, Download, ExternalLink, Eye, Fingerprint, Globe, KeyRound, Mail, Server, Wallet,
 } from "lucide-react";
 import { type ActorProfile as Profile, type Timeline } from "@/lib/api";
 import Confidence from "../ui/Confidence";
 import Panel from "../ui/Panel";
 import ActorTimeline from "./ActorTimeline";
+import ActorReportPreview from "./ActorReportPreview";
 
 const IDENT_ICON: Record<string, typeof KeyRound> = {
   pgp: KeyRound, wallet: Wallet, email: Mail, onion: Globe,
@@ -26,6 +27,7 @@ export default function ActorProfileView({
 }) {
   const p = profile;
   const tl = timeline;
+  const [preview, setPreview] = useState(false);
 
   if (!actorId) {
     return (
@@ -46,6 +48,12 @@ export default function ActorProfileView({
       right={
         p && (
           <span className="flex items-center gap-1">
+            <button
+              onClick={() => setPreview(true)}
+              className="mono flex items-center gap-1 border border-[color-mix(in_srgb,var(--accent)_50%,transparent)] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-[var(--c-high)] transition hover:bg-[color-mix(in_srgb,var(--accent)_22%,transparent)]"
+            >
+              <Eye className="h-2.5 w-2.5" /> preview
+            </button>
             {(["json", "csv"] as const).map((fmt) => (
               <a
                 key={fmt}
@@ -60,6 +68,7 @@ export default function ActorProfileView({
         )
       }
     >
+      {p && preview && <ActorReportPreview profile={p} onClose={() => setPreview(false)} />}
       <div className="slim h-full overflow-y-auto p-3">
         {err && <p className="mono text-[10px] text-[var(--muted)]">{err}</p>}
         {!p && !err && <p className="mono text-[10px] text-[var(--muted-2)]">LOADING PROFILE…</p>}

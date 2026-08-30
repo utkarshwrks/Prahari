@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { Billboard, Line, OrbitControls, Text } from "@react-three/drei";
+import { Billboard, Line, OrbitControls, Points, PointMaterial, Text } from "@react-three/drei";
 import * as THREE from "three";
 import { forceLink, forceManyBody, forceSimulation } from "d3-force";
 import type { ActorProfile } from "@/lib/api";
@@ -256,17 +256,42 @@ function GraphScene({
   );
 }
 
+function Starfield() {
+  const ref = useRef<THREE.Points>(null);
+  const positions = useMemo(() => {
+    const N = 1400;
+    const arr = new Float32Array(N * 3);
+    for (let i = 0; i < N; i++) {
+      // stars on a thick spherical shell around the graph
+      const r = 7 + Math.random() * 8;
+      const t = Math.random() * Math.PI * 2;
+      const ph = Math.acos(2 * Math.random() - 1);
+      arr[i * 3] = r * Math.sin(ph) * Math.cos(t);
+      arr[i * 3 + 1] = r * Math.sin(ph) * Math.sin(t);
+      arr[i * 3 + 2] = r * Math.cos(ph);
+    }
+    return arr;
+  }, []);
+  useFrame((_, d) => { if (ref.current) { ref.current.rotation.y += d * 0.012; ref.current.rotation.x += d * 0.004; } });
+  return (
+    <Points ref={ref} positions={positions} frustumCulled={false}>
+      <PointMaterial transparent color="#cdd6e6" size={0.05} sizeAttenuation depthWrite={false} opacity={0.8} />
+    </Points>
+  );
+}
+
 export default function ActorGraph3D({
-  profile, onSelect, selected,
-}: { profile: ActorProfile; onSelect: (s: GraphSelection) => void; selected: string | null }) {
+  profile, onSelect, selected, holo = false,
+}: { profile: ActorProfile; onSelect: (s: GraphSelection) => void; selected: string | null; holo?: boolean }) {
   return (
     <Canvas camera={{ position: [0, 0, 5.2], fov: 50 }} dpr={[1, 2]} gl={{ antialias: true, alpha: true }}
       onPointerMissed={() => onSelect(null)}>
       <ambientLight intensity={0.75} />
       <pointLight position={[4, 4, 4]} intensity={0.5} />
       <pointLight position={[-4, -2, -3]} intensity={0.3} color={0x5b9bd5} />
+      {holo && <Starfield />}
       <GraphScene profile={profile} selected={selected} onSelect={onSelect} />
-      <OrbitControls enablePan={false} enableZoom minDistance={2.8} maxDistance={10} rotateSpeed={0.6} />
+      <OrbitControls enablePan={false} enableZoom minDistance={2.8} maxDistance={holo ? 16 : 10} rotateSpeed={0.6} />
     </Canvas>
   );
 }

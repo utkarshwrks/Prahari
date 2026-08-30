@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
-import { Copy, Maximize2, Network, RotateCcw, X } from "lucide-react";
+import { Copy, Maximize2, Minimize2, Network, RotateCcw, X } from "lucide-react";
 import type { ActorProfile } from "@/lib/api";
 import type { GraphSelection } from "../three/ActorGraph3D";
 import { prefersReducedMotion } from "@/lib/a11y";
@@ -31,7 +31,7 @@ export default function ActorGraphPanel({
   const [use3d, setUse3d] = useState(false);
   const [sel, setSel] = useState<GraphSelection>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [big, setBig] = useState(false);
+  const [max, setMax] = useState(false); // fullscreen holo mode
   const [nonce, setNonce] = useState(0); // remount to reset the view
 
   useEffect(() => {
@@ -46,6 +46,16 @@ export default function ActorGraphPanel({
   // Reset selection when the actor changes.
   useEffect(() => { setSel(null); setSelectedId(null); }, [profile.actor_id]);
 
+  // Esc leaves fullscreen; lock body scroll while maximised.
+  useEffect(() => {
+    if (!max) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMax(false); };
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
+  }, [max]);
+
   function handleSelect(s: GraphSelection) {
     if (s?.type === "pair") { onOpenPair(s.pairId); return; }
     setSel(s);
@@ -54,17 +64,26 @@ export default function ActorGraphPanel({
 
   return (
     <div
-      className={`relative overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] transition-[height] ${
-        fill ? "h-full" : big ? "h-[520px]" : "h-[340px]"
-      }`}
-      style={{ background: "radial-gradient(circle at 50% 38%, color-mix(in srgb, var(--elevated) 55%, transparent), var(--bg-2))" }}
+      className={
+        max
+          ? "fixed inset-0 z-[80] overflow-hidden"
+          : `relative overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] ${fill ? "h-full" : "h-[340px]"}`
+      }
+      style={
+        max
+          ? undefined
+          : { background: "radial-gradient(circle at 50% 38%, color-mix(in srgb, var(--elevated) 55%, transparent), var(--bg-2))" }
+      }
     >
+      {/* 4D holo-space backdrop, only while maximised */}
+      {max && <HoloBackdrop />}
+
       {/* header row */}
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between p-2">
         <div className="flex items-center gap-1.5">
-          <Network className="h-3 w-3 text-[var(--muted-2)]" />
-          <span className="mono text-[9px] uppercase tracking-[0.16em] text-[var(--muted-2)]">
-            Relationship graph {use3d && "· drag to orbit · click a node"}
+          <Network className={`h-3 w-3 ${max ? "text-[var(--accent)]" : "text-[var(--muted-2)]"}`} />
+          <span className={`mono text-[9px] uppercase tracking-[0.16em] ${max ? "text-[var(--muted)]" : "text-[var(--muted-2)]"}`}>
+            Relationship graph {max ? "· holo mode · esc to exit" : use3d && "· drag to orbit · click a node"}
           </span>
         </div>
         {use3d && (
@@ -72,15 +91,15 @@ export default function ActorGraphPanel({
             <IconBtn title="Reset view" onClick={() => { setNonce((n) => n + 1); setSel(null); setSelectedId(null); }}>
               <RotateCcw className="h-3 w-3" />
             </IconBtn>
-            <IconBtn title={big ? "Shrink" : "Expand"} onClick={() => setBig((b) => !b)}>
-              <Maximize2 className="h-3 w-3" />
+            <IconBtn title={max ? "Minimise (Esc)" : "Maximise"} onClick={() => setMax((m) => !m)}>
+              {max ? <Minimize2 className="h-3 w-3" /> : <Maximize2 className="h-3 w-3" />}
             </IconBtn>
           </div>
         )}
       </div>
 
       {use3d ? (
-        <ActorGraph3D key={`${profile.actor_id}-${nonce}`} profile={profile} onSelect={handleSelect} selected={selectedId} />
+        <ActorGraph3D key={`${profile.actor_id}-${nonce}-${max ? "max" : "min"}`} profile={profile} onSelect={handleSelect} selected={selectedId} holo={max} />
       ) : (
         <Fallback2D profile={profile} onOpenPair={onOpenPair} />
       )}
@@ -139,6 +158,38 @@ function NodeCard({ sel, onClose }: { sel: Extract<GraphSelection, { type: "node
           </a>
         )}
       </div>
+    </div>
+  );
+}
+
+/** The "4D holo space" backdrop for maximised mode: deep space, drifting nebula
+ *  in the skin accents, and a Tron-style holographic grid receding above and
+ *  below. The 3D starfield (holo prop on the graph) layers on top of this. */
+function HoloBackdrop() {
+  const grid = "color-mix(in srgb, var(--accent) 42%, transparent)";
+  const floor: React.CSSProperties = {
+    position: "absolute", left: "-60%", right: "-60%", height: "75%",
+    backgroundImage: `linear-gradient(${grid} 1px, transparent 1px), linear-gradient(90deg, ${grid} 1px, transparent 1px)`,
+    backgroundSize: "46px 46px",
+    animation: "holoScroll 5s linear infinite",
+  };
+  return (
+    <div className="absolute inset-0 z-0 overflow-hidden" style={{ background: "radial-gradient(120% 100% at 50% 50%, #0a0e1a 0%, #04060c 70%, #010204 100%)" }}>
+      <div style={{
+        position: "absolute", inset: "-25%",
+        background: "radial-gradient(38% 40% at 24% 28%, var(--halo), transparent 70%), radial-gradient(44% 46% at 80% 72%, color-mix(in srgb, var(--accent-2) 20%, transparent), transparent 70%)",
+        filter: "blur(24px)", animation: "holoDrift 20s ease-in-out infinite alternate",
+      }} />
+      {/* floor grid */}
+      <div style={{ ...floor, bottom: "-12%", transform: "perspective(520px) rotateX(72deg)", transformOrigin: "bottom", opacity: 0.4, maskImage: "linear-gradient(to top, black, transparent 85%)", WebkitMaskImage: "linear-gradient(to top, black, transparent 85%)" }} />
+      {/* ceiling grid */}
+      <div style={{ ...floor, top: "-12%", transform: "perspective(520px) rotateX(-72deg)", transformOrigin: "top", opacity: 0.22, maskImage: "linear-gradient(to bottom, black, transparent 85%)", WebkitMaskImage: "linear-gradient(to bottom, black, transparent 85%)" }} />
+      {/* vignette */}
+      <div className="absolute inset-0" style={{ boxShadow: "inset 0 0 200px 40px rgba(0,0,0,0.6)" }} />
+      <style>{`
+        @keyframes holoDrift { 0%{transform:translate3d(-2%,-1%,0) scale(1)} 100%{transform:translate3d(2%,1%,0) scale(1.08)} }
+        @keyframes holoScroll { from{background-position:0 0} to{background-position:0 46px} }
+      `}</style>
     </div>
   );
 }
