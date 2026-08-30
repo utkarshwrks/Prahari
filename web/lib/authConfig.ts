@@ -18,12 +18,25 @@
 
 export const IS_PRODUCTION = process.env.NODE_ENV === "production";
 
+/**
+ * `next build` runs with NODE_ENV=production, but a BUILD authenticates nobody.
+ *
+ * The Phase 11 fresh-clone run caught this: the import-time guard fired during
+ * `npm run build` and failed the build on any machine without a secret --
+ * which is CI, and any judge following the README. Refusing to BOOT is
+ * correct; refusing to BUILD is over-reach that makes the honest thing
+ * (checking secrets) look like a broken repository.
+ *
+ * The guard still fires when a server actually starts serving.
+ */
+const IS_BUILD_PHASE = process.env.NEXT_PHASE === "phase-production-build";
+
 const DEV_SECRET = "prahari-local-development-secret-do-not-use-in-production-8f3a";
 
 function resolveSecret(): string {
   const configured = process.env.NEXTAUTH_SECRET?.trim();
   if (configured) {
-    if (IS_PRODUCTION && configured === DEV_SECRET) {
+    if (IS_PRODUCTION && !IS_BUILD_PHASE && configured === DEV_SECRET) {
       throw new Error(
         "PRAHARI refuses to start: NEXTAUTH_SECRET is set to the development " +
           "default. Generate one with `openssl rand -base64 32`."
@@ -31,7 +44,7 @@ function resolveSecret(): string {
     }
     return configured;
   }
-  if (IS_PRODUCTION) {
+  if (IS_PRODUCTION && !IS_BUILD_PHASE) {
     throw new Error(
       "PRAHARI refuses to start in production without NEXTAUTH_SECRET. " +
         "A known signing secret allows anyone to forge a session for any " +
