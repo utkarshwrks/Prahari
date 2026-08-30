@@ -311,3 +311,88 @@ def test_export_pdf_is_a_pdf_or_an_honest_fallback():
     data = X.to_pdf("CASE-001")
     assert isinstance(data, bytes) and len(data) > 100
     assert data[:4] == b"%PDF" or b"merkle_root" in data
+
+
+# --------------------------------------------------------------------------
+# Seal ordering. This bug passed all 32 tests above because none of them
+# sealed and then exported, and compared the two roots.
+# --------------------------------------------------------------------------
+
+
+def test_exported_root_is_the_root_that_was_anchored(monkeypatch):
+    """Regression, Critical.
+
+    Sealing appends a `seal` record. Anchoring BEFORE that append meant the
+    export published a root computed over N+1 records while the chain held the
+    root over N -- an exported case file claiming a Merkle root that was never
+    anchored. Chain verification would fail on a genuine, untampered export.
+    """
+    from engine.audit import cases as CS
+    from engine.audit import export as X
+    from engine.audit import merkle as MK
+    from engine.routers import audit as R
+
+    CS._LEDGERS.pop("CASE-SEALTEST", None)
+    CS._SEALS.pop("CASE-SEALTEST", None)
+    priv, pub = CS.keys_for(CS.DEMO_ANALYST)
+    lg = CS.ledger("CASE-SEALTEST")
+    lg.append(CS.DEMO_ANALYST, "confirm", {"pair_id": "a|b"}, priv, pub)
+    lg.append(CS.DEMO_ANALYST, "note", {"text": "n"}, priv, pub)
+
+    captured = {}
+
+    class FakeProvider:
+        def anchor(self, root, case_ref, leaf_count):
+            from engine.audit.anchor import AnchorResult
+
+            captured["root"] = root
+            captured["leaf_count"] = leaf_count
+            return AnchorResult(ok=True, root=root, chain_id=31337, tx_hash="0x" + "ab" * 32,
+                                block=1, gas_used=95232, is_public_chain=False,
+                                chain_label="LOCAL CHAIN")
+
+    monkeypatch.setattr(R, "get_provider", lambda: FakeProvider())
+    out = R.seal("CASE-SEALTEST")
+    assert out["ok"]
+
+    bundle = X.bundle("CASE-SEALTEST")
+    assert bundle["merkle_root"] == captured["root"], (
+        "the exported root is not the root that was anchored")
+    assert bundle["sealed_root"] == captured["root"]
+    assert bundle["sealed_root_matches_current"] is True
+    assert bundle["records_added_after_seal"] == 0
+    # The seal action itself must be covered by the anchored root.
+    assert captured["leaf_count"] == len(lg.records)
+    assert lg.records[-1].action == "seal"
+    assert MK.root(lg.leaves()) == captured["root"]
+
+
+def test_post_seal_records_are_flagged_not_hidden(monkeypatch):
+    """Appending after a seal is legitimate; publishing the new root as if it
+    were anchored is not."""
+    from engine.audit import cases as CS
+    from engine.audit import export as X
+    from engine.routers import audit as R
+
+    CS._LEDGERS.pop("CASE-DRIFT", None)
+    CS._SEALS.pop("CASE-DRIFT", None)
+    priv, pub = CS.keys_for(CS.DEMO_ANALYST)
+    lg = CS.ledger("CASE-DRIFT")
+    lg.append(CS.DEMO_ANALYST, "confirm", {"pair_id": "a|b"}, priv, pub)
+
+    class FakeProvider:
+        def anchor(self, root, case_ref, leaf_count):
+            from engine.audit.anchor import AnchorResult
+
+            return AnchorResult(ok=True, root=root, chain_id=31337,
+                                tx_hash="0x" + "cd" * 32, block=1,
+                                is_public_chain=False, chain_label="LOCAL CHAIN")
+
+    monkeypatch.setattr(R, "get_provider", lambda: FakeProvider())
+    R.seal("CASE-DRIFT")
+    lg.append(CS.DEMO_ANALYST, "note", {"text": "added after sealing"}, priv, pub)
+
+    b = X.bundle("CASE-DRIFT")
+    assert b["sealed_root_matches_current"] is False
+    assert b["records_added_after_seal"] == 1
+    assert "appended after this case was sealed" in b["integrity_note"]

@@ -469,3 +469,21 @@ investigative metadata. No handle, wallet, name or listing text ever reaches the
 Re-anchoring an existing root reverts (`AlreadyAnchored`). Allowing it would let an operator overwrite
 an earlier seal's timestamp, which is exactly the backdating the chain exists to prevent — and it is
 what makes D3.3 objective 4 (replaying another case's seal) fail closed.
+
+### DEC-038 — The seal record must be INSIDE the root it seals.
+Found by testing the demo flow end to end, not by the 32 audit tests — none of which sealed, exported,
+and then compared the exported root against the anchored one.
+
+Sealing is an auditable action, so it belongs in the ledger. But appending it **after** anchoring
+changes the leaf set: the chain held the root over N records while the export published the root over
+N+1. **An exported case file claimed a Merkle root that had never been anchored**, and anyone
+verifying that genuine, untampered export against the chain would have got a mismatch — the audit
+trail broken at exactly the point it exists to hold.
+
+Order is now: append the seal-intent record → compute the root over the ledger **including** it →
+anchor that root. The transaction hash lives in the seal metadata, not in the ledger, because a record
+cannot contain the hash of a transaction that commits to that record.
+
+Exports additionally publish `sealed_root`, `sealed_root_matches_current` and
+`records_added_after_seal`. Appending after a seal is legitimate; publishing the drifted root as if it
+were anchored is not. Two regression tests cover both.

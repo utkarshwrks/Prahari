@@ -19,10 +19,26 @@ def bundle(case_id: str) -> dict:
     lg = ledger(case_id)
     leaves = lg.leaves()
     seal = get_seal(case_id) or {}
+    current_root = M.root(leaves)
+    sealed_root = seal.get("root")
+
+    # If records were appended after sealing, the current root legitimately
+    # differs from the anchored one. Say so loudly rather than publishing a
+    # root that was never on chain.
+    drift = bool(sealed_root and sealed_root != current_root)
+
     return {
         "case_id": case_id,
         "generated_by": "PRAHARI v2",
-        "merkle_root": M.root(leaves),
+        "merkle_root": current_root,
+        "sealed_root": sealed_root,
+        "sealed_root_matches_current": (not drift) if sealed_root else None,
+        "records_added_after_seal": (
+            len(leaves) - seal.get("leaf_count", len(leaves))) if sealed_root else 0,
+        "integrity_note": (
+            "Records were appended after this case was sealed. Verify the "
+            "sealed_root against the chain, and re-seal to cover the new records."
+            if drift else None),
         "leaf_count": len(leaves),
         "seal": seal,
         "chain_id": seal.get("chain_id"),

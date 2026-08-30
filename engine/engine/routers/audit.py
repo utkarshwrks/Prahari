@@ -52,20 +52,35 @@ def append_record(case_id: str, a: Action) -> dict:
 
 @router.post("/audit/case/{case_id}/seal")
 def seal(case_id: str) -> dict:
-    """Anchor the case's Merkle root. The chain label comes from the node."""
+    """Anchor the case's Merkle root. The chain label comes from the node.
+
+    ORDER MATTERS, and getting it wrong silently broke the audit trail.
+
+    Sealing is itself an auditable action, so it must appear in the ledger.
+    But appending it AFTER anchoring changes the leaf set, so the root that
+    ends up in the export is not the root that was anchored -- an exported case
+    file would claim a Merkle root that never reached the chain, and anyone
+    verifying it against the chain would get a mismatch.
+
+    So: append the seal-intent record FIRST, compute the root over the ledger
+    INCLUDING it, then anchor that root. The transaction hash is stored in the
+    seal metadata rather than in the ledger, because a record cannot contain
+    the hash of a transaction that commits to that record.
+    """
     lg = ledger(case_id)
-    leaves = lg.leaves()
-    if not leaves:
+    if not lg.records:
         return {"ok": False, "detail": "Nothing to seal: the ledger is empty."}
 
+    priv, pub = keys_for(DEMO_ANALYST)
+    lg.append(DEMO_ANALYST, "seal",
+              {"intent": "seal", "records_at_seal": len(lg.records)}, priv, pub)
+
+    leaves = lg.leaves()
     root = M.root(leaves)
     res = get_provider().anchor(root, case_ref(case_id), len(leaves))
     data = res.as_dict()
     if res.ok:
-        set_seal(case_id, data)
-        priv, pub = keys_for(DEMO_ANALYST)
-        lg.append(DEMO_ANALYST, "seal",
-                  {"root": root, "tx_hash": res.tx_hash, "chain_id": res.chain_id}, priv, pub)
+        set_seal(case_id, {**data, "root": root, "leaf_count": len(leaves)})
     return {"ok": res.ok, "case_id": case_id, "merkle_root": root,
             "leaf_count": len(leaves), **data}
 
