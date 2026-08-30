@@ -498,7 +498,7 @@ Every answer is short, honest, and confident. The golden rule: **"We geofence wh
      route (`/api/live-intel`), so real headlines stream in continuously.
 
 128. **Show me proof it's real.**
-     Live cards are badged 🔴 with the channel (e.g. "Hacker News", "Google News"). Click any live
+     Live cards are badged LIVE with the channel (e.g. "Hacker News", "Google News"). Click any live
      card → **"Open Source Article"** opens the exact real article (e.g. a BBC or news report). We
      saw real items like *"ShinyHunters has leaked the data of multiple companies"* and *"Delhi
      Police arrest two in ₹80 lakh online fraud."*
@@ -556,7 +556,7 @@ Every answer is short, honest, and confident. The golden rule: **"We geofence wh
 
 ---
 
-## 🏆 Closing lines (end strong)
+## Closing lines (end strong)
 
 - "PRAHARI is the sentinel for the last mile of Indian policing — honest, local, and free."
 - "We don't unmask Tor. We geofence what criminals say. And in the next 20 seconds, you'll watch

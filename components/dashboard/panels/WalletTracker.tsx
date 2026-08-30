@@ -1,6 +1,6 @@
 "use client";
 
-import { Bitcoin } from "lucide-react";
+import { Bitcoin, Check } from "lucide-react";
 import { toast } from "sonner";
 import { useIntel } from "@/store/intel";
 import { walletClusters } from "@/lib/analytics";
@@ -10,8 +10,9 @@ function copyWallet(w: string) {
   navigator.clipboard?.writeText(w).then(
     () =>
       toast.custom(() => (
-        <div className="mono border border-red bg-panel px-3 py-2 text-[12px] text-text shadow-glow">
-          ✓ Wallet copied
+        <div className="mono flex items-center gap-1.5 border border-red bg-panel px-3 py-2 text-[12px] text-text shadow-glow">
+          <Check className="h-3 w-3 shrink-0 text-red-bright" />
+          Wallet copied
         </div>
       )),
     () => {}

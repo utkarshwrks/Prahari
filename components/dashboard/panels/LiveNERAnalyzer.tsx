@@ -2,7 +2,7 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import { useState } from "react";
-import { Loader2, ScanSearch, MapPin, Flag, Bitcoin, AtSign } from "lucide-react";
+import { Loader2, ScanSearch, MapPin, Flag, Bitcoin, AtSign, CornerDownRight } from "lucide-react";
 import { useIntel } from "@/store/intel";
 import TacticalPanel from "../../ui/TacticalPanel";
 
@@ -130,8 +130,9 @@ export default function LiveNERAnalyzer() {
                 )}
               </div>
               {e && e.locations.length > 0 && (
-                <div className="mono mt-2 text-[9px] tracking-widest text-red-bright">
-                  ↳ {e.locations.length} location(s) plotted on map
+                <div className="mono mt-2 flex items-center gap-1.5 text-[9px] tracking-widest text-red-bright">
+                  <CornerDownRight className="h-2.5 w-2.5 shrink-0" />
+                  {e.locations.length} location(s) plotted on map
                 </div>
               )}
             </motion.div>

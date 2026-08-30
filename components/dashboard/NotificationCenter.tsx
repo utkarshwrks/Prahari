@@ -13,6 +13,7 @@ import {
   Clock as ClockIcon,
   UserCheck,
   CheckCheck,
+  Check,
   Radar,
   FolderPlus,
   ExternalLink,
@@ -268,8 +269,9 @@ function AlertDetail({ alert, onLocate }: { alert: AlertLogEntry; onLocate: () =
       sourceText: alert.rawText,
     });
     toast.custom(() => (
-      <div className="mono border border-red bg-panel px-3 py-2 text-[12px] text-text shadow-glow">
-        ✓ Case record <span className="text-red-bright">{id}</span> created
+      <div className="mono flex items-center gap-1.5 border border-red bg-panel px-3 py-2 text-[12px] text-text shadow-glow">
+        <Check className="h-3 w-3 shrink-0 text-red-bright" />
+        Case record <span className="text-red-bright">{id}</span> created
       </div>
     ));
   }

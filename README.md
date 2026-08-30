@@ -1,16 +1,114 @@
 # PRAHARI · प्रहरी — "The Sentinel That Never Sleeps"
 
-**A Dark-Web Threat Intelligence & Geofencing Control Room for the Madhya Pradesh Police Cyber Cell, Jabalpur.**
+**Dark-web threat-actor attribution and geofencing control room for the Madhya Pradesh Police Cyber Cell, Jabalpur.**
+Smart India Hackathon 2026 · PS 26151 (NTRO) · Team Vasiliades.
 
-> Runs 100% free. `npm install && npm run dev`, log in with one click, and watch a live
-> threat map light up. All demo data is synthetic and safe.
+## What PRAHARI v2 is, in ten lines
+
+Threat actors on dark-web markets leak footprints: a reused PGP key, a wallet that appears twice, an
+onion whose TLS certificate names a clearnet domain, a writing habit that survives a rebrand. PRAHARI
+collects those footprints from public and academically-released sources, extracts entities from them
+(including Hinglish), and runs four independent engines — infrastructure, identity graph, stylometry,
+blockchain — over the result. It then fuses their evidence into a **single calibrated confidence score**
+that refuses to double-count correlated signals, geofences whatever it finds against Jabalpur district,
+and seals the whole case into a tamper-evident, cryptographically anchored record an officer can take to
+court. It runs at ₹0 on free tiers and open-source software, entirely on-premise.
+
+**We never break Tor, never scrape a live market, and never claim to.** Attribution here means
+correlating footprints the actors leaked themselves, from public indexes.
+
+## Three things no competing system does
+
+1. **A confidence score that survives cross-examination.** Stack five correlated signals naively and you
+   get **0.999** — false certainty. PRAHARI converts each to a likelihood ratio, collapses them by root
+   cause so one underlying fact cannot be counted five times, and dampens each by its measured
+   reliability. The same five signals yield **0.84**. We publish our false-merge rate and back it with a
+   distribution-free conformal guarantee at a chosen risk budget α.
+2. **Court-grade chain of custody.** Every analyst action is canonically serialised, keccak-256 hashed,
+   chained to its predecessor and signed with the analyst's Ed25519 key. Each case's Merkle root is
+   anchored on Ethereum Sepolia — 32-byte hashes only, never PII. A single record can be verified against
+   the chain via its inclusion proof, satisfying Bharatiya Sakshya Adhiniyam 2023 §63.
+3. **Last-mile jurisdiction routing.** Attribution ends where it has to: a sealed case file routed to the
+   responsible district cyber cell, geofenced by real haversine distance, not a guess.
 
 ```
-Framework   Next.js 14 (App Router) · TypeScript strict     Lines    ~6,130 TS/TSX
-Auth        NextAuth v4 Credentials + bcryptjs               Files    58 source modules
-State       zustand (2 stores)                               Cost     ₹0 / $0 to run
-Map         react-leaflet + Leaflet + free tiles             Keys     none required
+Framework   Next.js 14 (App Router) · TypeScript strict     Web      6,544 TS/TSX · 65 modules
+Engine      FastAPI · Python 3.11 · CPU-only inference      Cost     ₹0 / $0 to run
+Data        PostgreSQL + pgvector · Neo4j GDS · DuckDB      Keys     none required to run v1
+Chain       Solidity + ethers v6 · Sepolia (Anvil offline)  Status   Phase 1 of 11 complete
 ```
+
+Run v1 today with no keys and no Docker: `npm install && npm run dev`, then log in as
+`officer@mp.gov.in` / `prahari123`. All DEMO data is synthetic and labelled as such.
+
+---
+
+## Feature status
+
+**v1** = shipped in the geofence console · **done** = built and tested in v2 · **planned** = specified,
+not started · **roadmap** = descoped, never demoed as working.
+
+| # | Feature | Phase | Status |
+|---|---|---|---|
+| FR-01 | Two-ring Jabalpur geofence (60 km core / 95 km zone), haversine-driven | v1 | **v1** |
+| FR-02 | 10-city MP gazetteer with computed in-zone set | v1 | **v1** |
+| FR-03 | 46-city national gazetteer, plotting only, cannot breach | v1 | **v1** |
+| FR-04 | Synthetic intel streamer, 7 templates × 4 categories | v1 | **v1** |
+| FR-05 | Pre-tagged entity extraction on the feed | v1 | **v1** |
+| FR-06 | Threat state machine NOMINAL → ELEVATED → CRITICAL with decay | v1 | **v1** |
+| FR-07 | Geofence breach detection, sirens, toasts, counters | v1 | **v1** |
+| FR-08 | Leaflet map, 4 basemaps, heat-sized markers, fly-to | v1 | **v1** |
+| FR-09 | Alert log with status / assignee / note, capped 200 | v1 | **v1** |
+| FR-10 | Notification centre drawer | v1 | **v1** |
+| FR-11 | Case records with localStorage persistence | v1 | **v1** |
+| FR-12 | Records modal: table, 5 charts, report, JSON export | v1 | **v1** |
+| FR-13 | Live NER analyzer, server-side, honest engine badge | v1 | **v1** |
+| FR-14 | Wallet cluster tracker | v1 | **v1** |
+| FR-15 | Handle watch list | v1 | **v1** |
+| FR-16 | Threat analytics: 90 s activity buckets, spike index | v1 | **v1** |
+| FR-17 | Jabalpur zone monitor panel | v1 | **v1** |
+| FR-18 | LIVE OSINT mode: HN + Google News + Reddit | v1 | **v1** |
+| FR-19 | NextAuth credentials auth, bcrypt, middleware-protected dashboard | v1 | **v1** |
+| FR-20 | Guided tour | v1 | **v1** |
+| FR-21 | Landing, about and docs pages | v1 | **v1** |
+| FR-22 | Tactical design system, radius ≤ 4 px, no gradients off-palette | v1 | **v1** |
+| FR-23 | Breach audio, mutable | v1 | **v1** |
+| FR-24 | Zero-key, zero-cost operation | v1 | **v1** |
+| FR-25 | Repository audit with verified invariants | 1 | **done** |
+| FR-26 | Regression tests on the geofence and extractor | 1 | **done** |
+| FR-27 | No emoji or decorative glyphs in rendered UI | 1 | **done** |
+| FR-28 | Monorepo layout (`web/` + `engine/` + `anchor/`) | 2 | planned |
+| FR-29 | Containerised Neo4j (GDS) + PostgreSQL (pgvector) | 2 | planned |
+| FR-30 | FastAPI engine, all keys optional, honest degradation | 2 | planned |
+| FR-31 | Three-way mode: DEMO · DATASET · LIVE | 2 | planned |
+| FR-32 | Server-side engine proxy — no engine URL in the browser | 2 | planned |
+| FR-33 | Autonomous scheduler + `/sources` freshness reporting | 2 | planned |
+| FR-34 | Public dataset loaders (Gwern DNM, Kaggle Agora) | 3 | planned |
+| FR-35 | Ground-truth testbed with four labelled cases, fixed seed | 3 | planned |
+| FR-36 | Deep extraction: PGP, onion v3, XMR, spaCy + MuRIL Hinglish NER | 3 | planned |
+| FR-37 | Identity graph in Neo4j with typed, weighted relationships | 4 | planned |
+| FR-38 | Splink probabilistic record linkage with trained m/u weights | 4 | planned |
+| FR-39 | GDS actor resolution: WCC, Louvain, FastRP embeddings | 4 | planned |
+| FR-40 | Stylometry with Hinglish markers + LaBSE embeddings | 5 | planned |
+| FR-41 | Behavioural profiling and rebrand change-point detection | 5 | planned |
+| FR-42 | Counter-deception: mimicry and LLM-rewrite detection | 5 | planned |
+| FR-43 | Passive onion → clearnet infrastructure pivoting (crt.sh, JARM) | 6 | planned |
+| FR-44 | Evidence fusion: root-cause collapse, reliability dampening, caps | 7 | planned |
+| FR-45 | Isotonic calibration + split-conformal false-merge guarantee | 7 | planned |
+| FR-46 | Immutable audit ledger: keccak hash chain + Ed25519 signatures | 8 | planned |
+| FR-47 | Per-case Merkle root + single-record inclusion proofs | 8 | planned |
+| FR-48 | Sepolia anchoring with visible LOCAL CHAIN Anvil fallback | 8 | planned |
+| FR-49 | CSV / JSON / PDF export carrying root, tx hash and chain id | 8 | planned |
+| FR-50 | 3D actor graph with timeline scrubber | 9 | planned |
+| FR-51 | Evidence trail Sankey with visible LR maths | 9 | planned |
+| FR-52 | MapLibre tilted map with extruded heat and actor footprint | 9 | planned |
+| FR-53 | Accessibility: focus trap, aria-live, `prefers-reduced-motion` | 9 | planned |
+| FR-54 | Responsive contract at 1440 / 1024 / 390 px | 9 | planned |
+| FR-55 | Production security: secret enforcement, rate limits, RBAC | 10 | planned |
+| FR-56 | Reproducible metrics pipeline | 10 | planned |
+
+Status is authoritative in [`PROGRESS.md`](PROGRESS.md). Design decisions and their reasons are in
+[`docs/DECISIONS.md`](docs/DECISIONS.md); the v1 audit is in [`docs/AUDIT_V1.md`](docs/AUDIT_V1.md).
 
 ---
 
@@ -107,9 +205,9 @@ Here is exactly what PRAHARI does with it, with the responsible code path:
 | Stage | What happens | Result for this example | Code |
 |-------|--------------|--------------------------|------|
 | **1. Ingest** | A new intercept arrives in the Live Intel Feed | Card appears, newest on top | `store/intel.ts → tick()` |
-| **2. Extract** | NER tags the entities | 📍 `Jabalpur`, `Katni` · ⚑ `MDMA`, `LSD` · ₿ `bc1q7x…` · @ `nightowl_mp` | `lib/mockIntel.ts` (pre-tagged) / `lib/extractor.ts` (live) |
+| **2. Extract** | NER tags the entities | `Jabalpur`, `Katni` · `MDMA`, `LSD` · `bc1q7x…` · `nightowl_mp` | `lib/mockIntel.ts` (pre-tagged) / `lib/extractor.ts` (live) |
 | **3. Geofence** | Each city is measured against Jabalpur | `Jabalpur` = **in-zone** ✅ · `Katni` = **in-zone** ✅ | `lib/cities.ts → isInJabalpurZone()` |
-| **4. Alert** | In-zone hit → breach | 🔴 Map sirens · toast **"GEOFENCE BREACH: JABALPUR"** · Threat Level → **CRITICAL** · counter +1 · Alert Log row · bell badge +1 | `store/intel.ts → ingest()` |
+| **4. Alert** | In-zone hit → breach | Map sirens · toast **"GEOFENCE BREACH: JABALPUR"** · Threat Level → **CRITICAL** · counter +1 · Alert Log row · bell badge +1 | `store/intel.ts → ingest()` |
 | **5. Report** | Correlate + case-manage + export | `bc1q7x…` seen before → wallet cluster · assign an officer · export JSON / printable report | `store/records.ts`, `panels/AlertLog.tsx` |
 
 If the listing had named **Bhopal** instead (an MP city *outside* Jabalpur), it would still
@@ -324,8 +422,8 @@ read severity mix, source breakdown, top mentioned cities, cases by status.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│ PRAHARI प्रहरी │  [THREAT LEVEL: CRITICAL] │ ●UPLINK  12:04:33  [DEMO][💬][🔇] │
-│ MP CYBER CELL   │                          │            [📁][🔔 3][👤 Officer] │
+│ PRAHARI प्रहरी │  [THREAT LEVEL: CRITICAL] │ ●UPLINK  12:04:33  [DEMO][TS][MU] │
+│ MP CYBER CELL   │                          │            [RC][AL 3][OF Officer] │
 ├───────────────┬──────────────────────────────────────┬───────────────────────┤
 │ LIVE INTEL    │        GEOSPATIAL COMMAND            │  THREAT ANALYTICS     │
 │ FEED   ●DEMO  │  ┌────────────────────────────────┐  │  ┌────┬────┐          │
@@ -333,7 +431,7 @@ read severity mix, source breakdown, top mentioned cities, cases by status.
 │ ┌───────────┐ │  │                                │  │  ├────┼────┤          │
 │ │▌MARKETPLACE│ │  │      ╭─ ─ ─ ─ ─ ─ ─╮          │  │  │  8 │ 12 │          │
 │ │ MDMA & LSD│ │  │     ╱   ◎ JABALPUR   ╲         │  │  └────┴────┘          │
-│ │ 📍Jabalpur│ │  │    │  ●Jabalpur ●Katni│        │  │  ▄▄▄ contraband       │
+│ │ ● Jabalpur│ │  │    │  ●Jabalpur ●Katni│        │  │  ▄▄▄ contraband       │
 │ └───────────┘ │  │     ╲   (60/95 km)   ╱         │  │  ╱╲╱╲ activity 90s    │
 │ ┌───────────┐ │  │      ╰─ ─ ─ ─ ─ ─ ─╯          │  ├───────────────────────┤
 │ │▌FORUM     │ │  │         ●Bhopal  ●Satna        │  │ JABALPUR ZONE MONITOR │
