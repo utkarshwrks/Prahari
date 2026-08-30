@@ -107,7 +107,7 @@ export function openReport<T>(spec: ReportSpec<T>): boolean {
   doc.body.appendChild(table);
 
   doc.body.appendChild(
-    el(doc, "div", "PRAHARI v2 · MP Cyber Cell, Jabalpur · Demo data is synthetic.")
+    el(doc, "div", "PRAHARI v2 · attribution by correlation of public footprints · SIH 2026 PS 26151")
   ).className = "footer";
 
   // Print after layout settles. No inline <script> in the generated document,

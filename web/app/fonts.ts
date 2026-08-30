@@ -1,26 +1,11 @@
-import { Anton, Space_Grotesk, JetBrains_Mono, Inter } from "next/font/google";
+import { Inter, JetBrains_Mono, Space_Grotesk } from "next/font/google";
 
-export const anton = Anton({
-  weight: "400",
-  subsets: ["latin"],
-  variable: "--font-anton",
-  display: "swap",
+export const sans = Inter({
+  subsets: ["latin"], variable: "--font-sans", display: "swap",
 });
-
-export const grotesk = Space_Grotesk({
-  subsets: ["latin"],
-  variable: "--font-grotesk",
-  display: "swap",
+export const mono = JetBrains_Mono({
+  subsets: ["latin"], variable: "--font-mono", display: "swap",
 });
-
-export const jetbrainsMono = JetBrains_Mono({
-  subsets: ["latin"],
-  variable: "--font-mono",
-  display: "swap",
-});
-
-export const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-  display: "swap",
+export const display = Space_Grotesk({
+  subsets: ["latin"], variable: "--font-display", display: "swap", weight: ["500","600","700"],
 });

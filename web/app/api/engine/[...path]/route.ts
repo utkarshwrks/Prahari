@@ -3,57 +3,36 @@ import { NextRequest, NextResponse } from "next/server";
 // Server-side proxy to the FastAPI engine.
 //
 // THE TRUST BOUNDARY. The browser talks only to this route; it never learns the
-// engine's URL and never receives an engine key. A browser-visible engine URL is
-// a Critical finding (docs/ARCHITECTURE.md section 3, D3.1 objective 4).
-//
-// ENGINE_URL is deliberately NOT prefixed NEXT_PUBLIC_, so Next cannot inline it
-// into client bundles even by accident.
+// engine's URL and never receives an engine key. ENGINE_URL is deliberately NOT
+// prefixed NEXT_PUBLIC_, so Next cannot inline it into a client bundle.
 
 export const dynamic = "force-dynamic";
 
 const ENGINE_URL = process.env.ENGINE_URL ?? "http://localhost:8000";
-// 8s was too tight. Fusion and audit routes do real computation -- Splink
-// training and profile building -- and a cold first call took ~20s, which the
-// proxy reported as "engine offline" on a healthy engine. The engine now warms
-// at startup; this ceiling is the backstop for a genuinely slow first call.
+
+// Fusion and audit routes do real computation. A cold first call took ~20s and
+// an 8s ceiling reported it as "engine offline" on a healthy engine.
 const TIMEOUT_MS = 45_000;
 
-// Only these prefixes may be proxied. An allowlist rather than a passthrough so
-// a future engine admin route cannot be reached from the browser by guessing.
+// An allowlist, not a passthrough: a future engine admin route must not be
+// reachable from the browser by guessing.
 const ALLOWED = [
-  "health",
-  "version",
-  "feed",
-  "sources",
-  "extract",
-  "graph",
-  "style",
-  "behaviour",
-  "rebrand",
-  "compare",
-  "infra",
-  "fusion",
-  "audit",
-  "export",
-  "chain",
+  "health", "version", "sources", "extract",
+  "actors", "actor", "export",
+  "graph", "fusion", "audit",
+  "infra", "chain",
+  "feed", "style", "behaviour", "rebrand", "compare",
 ];
 
 function isAllowed(path: string): boolean {
-  const head = path.split("/")[0] ?? "";
-  return ALLOWED.includes(head);
+  return ALLOWED.includes(path.split("/")[0] ?? "");
 }
 
-/** Never leaks the engine URL into a client-visible message. */
 function offline(detail: string) {
+  // HTTP 200 with an honest body: the workbench must be able to tell
+  // "engine down" from "request failed", and render a badge either way.
   return NextResponse.json(
-    {
-      ok: false,
-      engine: "offline",
-      // Honest degradation, per the ARCHITECTURE section 7 contract. The UI
-      // renders this verbatim as the "engine offline" badge.
-      detail,
-      items: [],
-    },
+    { ok: false, engine: "offline", detail, items: [], actors: [], results: [] },
     { status: 200 }
   );
 }
@@ -72,28 +51,35 @@ async function forward(req: NextRequest, path: string, method: "GET" | "POST") {
     signal: AbortSignal.timeout(TIMEOUT_MS),
     cache: "no-store",
   };
-  if (method === "POST") {
-    init.body = await req.text();
-  }
+  if (method === "POST") init.body = await req.text();
 
   try {
     const res = await fetch(url, init);
     const text = await res.text();
-    let body: unknown;
-    try {
-      body = JSON.parse(text);
-    } catch {
-      // The engine promises JSON. Anything else means something is in front of
-      // it (a proxy error page); do not forward it to the browser.
-      return offline("Engine returned a non-JSON response.");
+    const ct = res.headers.get("content-type") ?? "";
+
+    // Exports are CSV/PDF/JSON attachments; stream them through unchanged.
+    if (!ct.includes("application/json")) {
+      return new NextResponse(text, {
+        status: res.status,
+        headers: {
+          "Content-Type": ct || "text/plain",
+          ...(res.headers.get("content-disposition")
+            ? { "Content-Disposition": res.headers.get("content-disposition") as string }
+            : {}),
+        },
+      });
     }
-    return NextResponse.json(body, { status: res.status });
+
+    try {
+      return NextResponse.json(JSON.parse(text), { status: res.status });
+    } catch {
+      return offline("Engine returned a malformed response.");
+    }
   } catch (err) {
     const timedOut = err instanceof Error && err.name === "TimeoutError";
     return offline(
-      timedOut
-        ? "Engine did not respond in time. DEMO and LIVE modes are unaffected."
-        : "Engine unreachable. DEMO and LIVE modes are unaffected."
+      timedOut ? "Engine did not respond in time." : "Engine unreachable."
     );
   }
 }

@@ -6,9 +6,9 @@
  * behind it and lose track of where they were, and a screen reader was never
  * told a dialog had opened at all.
  *
- * `aria-live` on the alert feed matters more than usual here: a geofence breach
- * is the entire point of the product, and an officer using a screen reader
- * currently gets no announcement when one fires.
+ * Live regions matter here because attribution results arrive asynchronously:
+ * an analyst using a screen reader must be told when a verification comes back
+ * red, not discover it by tabbing into the panel.
  */
 
 const FOCUSABLE = [

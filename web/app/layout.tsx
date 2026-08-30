@@ -1,29 +1,19 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import "leaflet/dist/leaflet.css";
-import { anton, grotesk, jetbrainsMono, inter } from "./fonts";
+import { sans, mono, display } from "./fonts";
 import Providers from "./providers";
 
 export const metadata: Metadata = {
-  title: "PRAHARI · MP Cyber Cell — Dark-Web Threat Intelligence",
+  title: "PRAHARI — Dark-Web Threat Actor Attribution",
   description:
-    "PRAHARI (प्रहरी) — Dark-Web Threat Intelligence & Geofencing Control Room for the Madhya Pradesh Police Cyber Cell, Jabalpur. Content-based geospatial intelligence, not network deanonymization. Synthetic-data demo.",
+    "Attribution of dark-web threat actors by correlating footprints they leaked into public indexes. Calibrated confidence, published false-merge rate, tamper-evident record. SIH 2026 PS 26151.",
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html
-      lang="en"
-      className={`${anton.variable} ${grotesk.variable} ${jetbrainsMono.variable} ${inter.variable}`}
-    >
-      <body className="crt-lines">
-        <div className="tactical-bg" />
+    <html lang="en" className={`${sans.variable} ${mono.variable} ${display.variable}`}>
+      <body className="min-h-screen antialiased">
         <Providers>{children}</Providers>
-        <div className="scanline-overlay" />
       </body>
     </html>
   );

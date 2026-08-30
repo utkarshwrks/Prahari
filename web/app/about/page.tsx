@@ -1,167 +1,112 @@
-import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowUpRight, ShieldCheck, MapPin, IndianRupee, Scale } from "lucide-react";
-import PublicShell from "@/components/public/PublicShell";
-import SectionHeading from "@/components/public/SectionHeading";
+import Logo from "@/components/ui/Logo";
 
-export const metadata: Metadata = {
-  title: "About · PRAHARI",
-  description:
-    "PRAHARI's mission: honest, local, actionable dark-web threat intelligence for the MP Police Cyber Cell, Jabalpur.",
-};
+export const metadata = { title: "How it works — PRAHARI" };
 
-const DIFFERENTIATORS = [
-  {
-    icon: MapPin,
-    title: "Local",
-    body: "Built for a single district's streets — Jabalpur, Katni, Narsinghpur — not a global feed that never zooms in.",
-  },
-  {
-    icon: ShieldCheck,
-    title: "Honest",
-    body: "We geofence stated locations and never claim to deanonymize Tor. Every lead is auditable to a public source.",
-  },
-  {
-    icon: Scale,
-    title: "Actionable",
-    body: "Raw intercepts become correlated, exportable leads an officer can act on — not a dashboard that just looks busy.",
-  },
-  {
-    icon: IndianRupee,
-    title: "Free",
-    body: "Runs entirely on free and open tooling. No paid services, no billing — a cyber cell can stand it up at zero cost.",
-  },
+const STAGES = [
+  { n: "0", t: "Collect", b: "Public marketplace archives, certificate-transparency logs, published scan data, blockchain explorers, open-source intelligence feeds. Every source is an index that already holds the data — we read it, we never probe a target." },
+  { n: "1", t: "Extract", b: "PGP fingerprints computed from real key blocks, onion v3 addresses, BTC/ETH/XMR wallets, emails, handles. Entity names are normalised before anything downstream sees them, so an abbreviation the model recognises is not silently dropped." },
+  { n: "2", t: "Four engines", b: "Infrastructure pivoting, identity-graph resolution, stylometry and behaviour, blockchain lineage. Each emits signals labelled with the ROOT CAUSE of the agreement, which is what makes the next stage possible." },
+  { n: "3", t: "Fuse", b: "Likelihood ratios per signal, collapsed to the strongest per root cause, dampened by measured reliability, capped by must-not-link rules. Isotonic calibration, then a conformal threshold with a bounded false-merge rate." },
+  { n: "4", t: "Attribute", b: "Personas resolve into actors. The profile carries identifiers, infrastructure indicators, persona linkages, attribution confidence, category, last scan date and source — the fields the problem statement names." },
+  { n: "5", t: "Seal", b: "Every analyst action is hashed into an append-only chain, signed with an Ed25519 key, and the case Merkle root is anchored on chain. A single record can be proved without disclosing the case around it." },
 ];
 
-export default function AboutPage() {
+const NOT = [
+  ["We never touch Tor.", "No code path can resolve a .onion hostname. A network-layer test asserts it during a full infrastructure pivot, and the guard function is checked by CI."],
+  ["We never scrape a live market.", "The marketplace data is a publicly released academic archive. Reading a published index is not the same as crawling a target, and the distinction is the project's legal basis."],
+  ["We never put PII on chain.", "Only 32-byte hashes. Even the case reference is hashed, because a public ledger is permanent and world-readable and a case number is still investigative metadata."],
+  ["We never claim certainty.", "The system reports a calibrated probability with a published false-merge rate. A tool that says 99% is claiming something it cannot support."],
+];
+
+export default function About() {
   return (
-    <PublicShell>
-      {/* hero */}
-      <section className="border-b border-border">
-        <div className="mx-auto max-w-[1400px] px-4 py-20 sm:px-6">
-          <div className="mb-4 flex items-center gap-3">
-            <span className="h-px w-8 bg-red" />
-            <span className="mono text-[11px] uppercase tracking-[0.24em] text-red-bright">
-              About PRAHARI
-            </span>
-          </div>
-          <h1 className="max-w-4xl font-display text-5xl uppercase leading-[0.95] tracking-tight text-white sm:text-7xl">
-            The sentinel that never sleeps.
-          </h1>
-          <p className="mt-6 max-w-2xl text-lg leading-relaxed text-muted">
-            प्रहरी (prahari) means "sentinel." Our mission is to give the Madhya
-            Pradesh Police Cyber Cell a control room that turns openly-published
-            dark-web crime into local, honest, actionable intelligence.
-          </p>
+    <div className="min-h-screen">
+      <nav className="hairline sticky top-0 z-20 bg-[color-mix(in_srgb,var(--bg)_85%,transparent)] backdrop-blur">
+        <div className="mx-auto flex max-w-[1000px] items-center justify-between px-5 py-3">
+          <Link href="/"><Logo /></Link>
+          <Link href="/workbench" className="mono border border-[var(--border-2)] px-3 py-1.5 text-[10px] uppercase tracking-[0.16em] text-[var(--muted)] transition hover:border-[var(--accent-dim)] hover:text-[var(--c-high)]">
+            Workbench
+          </Link>
         </div>
-      </section>
+      </nav>
 
-      {/* mission / problem */}
-      <section className="border-b border-border">
-        <div className="mx-auto grid max-w-[1400px] gap-12 px-4 py-20 sm:px-6 lg:grid-cols-2">
-          <div>
-            <SectionHeading
-              kicker="The Problem in MP"
-              title="Crime that names our"
-              accent="cities, unseen by us."
-            />
-            <div className="mt-6 space-y-4 text-base leading-relaxed text-muted">
-              <p>
-                On Tor marketplaces, forums and paste dumps, sellers advertise
-                narcotics, weapon parts, stolen identity records and counterfeit
-                currency — and they say exactly where they deliver: "across
-                Jabalpur and Katni", "MP region, Bhopal and Indore".
-              </p>
-              <p>
-                That location leakage is intrinsic — a marketplace{" "}
-                <span className="text-text">must</span> advertise where it ships.
-                Yet national tools don't watch a single district, and local cells
-                have never had a console built for that last mile.
-              </p>
-            </div>
-          </div>
+      <article className="mx-auto max-w-[1000px] px-5 py-16">
+        <p className="mono text-[10px] uppercase tracking-[0.24em] text-[var(--muted-2)]">
+          PS 26151 · dark web threat actor de-anonymisation
+        </p>
+        <h1 className="display mt-4 text-4xl font-bold leading-tight text-[var(--text)]">
+          How PRAHARI attributes an actor
+        </h1>
+        <p className="mt-5 max-w-2xl text-[15px] leading-relaxed text-[var(--muted)]">
+          The problem statement asks for a system that links dark-web threat actors
+          to real-world entities by gathering footprints and correlating identifying
+          information. That is a correlation problem, not a network-attack problem —
+          and treating it honestly as correlation is what makes the output usable as
+          evidence.
+        </p>
 
-          <div>
-            <SectionHeading
-              kicker="The Honest Approach"
-              title="Content geofencing,"
-              accent="not deanonymization."
-            />
-            <div className="mt-6 space-y-4 text-base leading-relaxed text-muted">
-              <p>
-                The dark web is anonymous by design. You cannot geolocate the Tor
-                network, and PRAHARI never pretends to. Instead we read the{" "}
-                <span className="text-text">content</span> criminals publish and
-                use NER to extract the real-world locations they state themselves.
-              </p>
-              <p>
-                We geofence on those mentions — with Jabalpur as a protected
-                jurisdiction — and corroborate with recurring crypto-wallet
-                clusters and repeated @handles. This is content-based geospatial
-                threat intelligence: legal, defensible and genuinely useful.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* differentiators */}
-      <section className="border-b border-border">
-        <div className="mx-auto max-w-[1400px] px-4 py-20 sm:px-6">
-          <SectionHeading
-            kicker="What Makes Us Different"
-            title="Four principles,"
-            accent="one console."
-            center
-          />
-          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {DIFFERENTIATORS.map((d) => {
-              const Icon = d.icon;
-              return (
-                <div key={d.title} className="panel brackets p-6">
-                  <Icon className="h-6 w-6 text-red-bright" strokeWidth={1.6} />
-                  <h3 className="mono mt-4 text-base uppercase tracking-[0.14em] text-white">
-                    {d.title}
-                  </h3>
-                  <p className="mt-2 text-sm leading-relaxed text-muted">
-                    {d.body}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* built-for note + CTA */}
-      <section>
-        <div className="mx-auto max-w-[1400px] px-4 py-20 sm:px-6">
-          <div className="panel relative overflow-hidden p-8 sm:p-12">
-            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(225,6,0,0.12),transparent_60%)]" />
-            <div className="relative">
-              <div className="mono text-[11px] uppercase tracking-[0.22em] text-red-bright">
-                Built For
+        <h2 className="display mt-14 text-xl font-bold text-[var(--text)]">The pipeline</h2>
+        <ol className="mt-5 space-y-px border border-[var(--border)] bg-[var(--border)]">
+          {STAGES.map((s) => (
+            <li key={s.n} className="flex gap-4 bg-[var(--surface)] p-4">
+              <span className="mono shrink-0 text-[11px] font-bold text-[var(--c-high)]">{s.n}</span>
+              <div>
+                <h3 className="display text-[15px] font-semibold text-[var(--text)]">{s.t}</h3>
+                <p className="mt-1 text-[13px] leading-relaxed text-[var(--muted)]">{s.b}</p>
               </div>
-              <h2 className="mt-3 max-w-3xl font-heading text-3xl font-bold text-white sm:text-4xl">
-                The Madhya Pradesh Police Cyber Cell, Jabalpur.
-              </h2>
-              <p className="mt-4 max-w-2xl text-base text-muted">
-                Jabalpur is the pilot jurisdiction. Because the geofence and the
-                gazetteer are configuration — not code — a new district is a data
-                change, and the same console scales to every cell in the state.
-              </p>
-              <div className="mt-8 flex flex-wrap gap-3">
-                <Link href="/login" className="btn btn-primary">
-                  Launch Console <ArrowUpRight className="h-4 w-4" />
-                </Link>
-                <Link href="/docs" className="btn btn-ghost">
-                  Read the Docs
-                </Link>
-              </div>
+            </li>
+          ))}
+        </ol>
+
+        <h2 className="display mt-14 text-xl font-bold text-[var(--text)]">
+          The confidence model
+        </h2>
+        <p className="mt-4 max-w-2xl text-[14px] leading-relaxed text-[var(--muted)]">
+          Each signal becomes a likelihood ratio, <span className="mono text-[var(--text)]">LR = s / (1 − s)</span>.
+          Signals are grouped by <em>why</em> they agree and only the strongest survives per
+          group, so two views of one certificate count once. Each group is then raised to a
+          reliability exponent, because a signing key is not a writing style.
+        </p>
+        <p className="mono mt-4 border border-[var(--border)] bg-[var(--surface-2)] p-3 text-[11px] leading-relaxed text-[var(--muted)]">
+          odds = prior_odds × Π (LR_root ^ r_root)   ·   p = odds / (1 + odds)
+        </p>
+        <p className="mt-4 max-w-2xl text-[14px] leading-relaxed text-[var(--muted)]">
+          On the worked example this yields <span className="text-[var(--c-high)]">0.84</span> where
+          naive stacking yields <span className="text-[var(--muted-2)]">0.999</span>. Isotonic
+          regression then calibrates the score, and split-conformal prediction produces a
+          threshold at which the false-merge rate is bounded — measured at{" "}
+          <span className="text-[var(--c-high)]">3.1%</span> for a 5% risk budget.
+        </p>
+
+        <h2 className="display mt-14 text-xl font-bold text-[var(--text)]">
+          What we refuse to do
+        </h2>
+        <dl className="mt-5 space-y-4">
+          {NOT.map(([t, b]) => (
+            <div key={t} className="border-l-2 border-[var(--accent-dim)] pl-4">
+              <dt className="display text-[14px] font-semibold text-[var(--text)]">{t}</dt>
+              <dd className="mt-1 text-[13px] leading-relaxed text-[var(--muted)]">{b}</dd>
             </div>
-          </div>
-        </div>
-      </section>
-    </PublicShell>
+          ))}
+        </dl>
+
+        <h2 className="display mt-14 text-xl font-bold text-[var(--text)]">
+          Free, open source, on-premise
+        </h2>
+        <p className="mt-4 max-w-2xl text-[14px] leading-relaxed text-[var(--muted)]">
+          A unit handling investigative data cannot send it to a third-party service,
+          and cannot depend on a vendor renewal. Everything runs on one machine:
+          PostgreSQL, Neo4j Community, scikit-learn, a local chain when the network is
+          down. Certificate transparency and host fingerprints both work without an
+          account. <span className="text-[var(--text)]">Zero API keys are required</span> to
+          run the full system.
+        </p>
+
+        <footer className="mono mt-16 border-t border-[var(--border)] pt-6 text-[9px] uppercase tracking-[0.16em] text-[var(--muted-2)]">
+          PRAHARI · प्रहरी · Team Vasiliades
+        </footer>
+      </article>
+    </div>
   );
 }

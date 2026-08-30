@@ -1,33 +1,30 @@
-import type { Metadata } from "next";
 import Link from "next/link";
-import { Suspense } from "react";
-import AuthShell from "@/components/auth/AuthShell";
+import Logo from "@/components/ui/Logo";
 import LoginForm from "@/components/auth/LoginForm";
 
-export const metadata: Metadata = {
-  title: "Login · PRAHARI",
-  description: "Secure access to the PRAHARI control room.",
-};
+export const metadata = { title: "Sign in — PRAHARI" };
 
-export default function LoginPage() {
+export default function Page() {
   return (
-    <AuthShell
-      title="Launch Console"
-      subtitle="Authenticate to enter the Jabalpur control room."
-      footer={
-        <>
-          No account?{" "}
-          <Link href="/signup" className="text-red-bright hover:underline">
-            Create one
-          </Link>
-        </>
-      }
-    >
-      <Suspense
-        fallback={<div className="mono text-xs text-muted">Loading…</div>}
-      >
-        <LoginForm />
-      </Suspense>
-    </AuthShell>
+    <div className="flex min-h-screen flex-col">
+      <div className="hairline flex items-center justify-between px-4 py-4 sm:px-6">
+        <Link href="/"><Logo /></Link>
+        <Link href="/" className="mono text-[10px] uppercase tracking-[0.16em] text-[var(--muted-2)] transition hover:text-[var(--text)]">
+          Back
+        </Link>
+      </div>
+      <div className="flex flex-1 items-center justify-center px-4 py-12">
+        <div className="w-full max-w-sm">
+          <h1 className="display text-2xl font-bold text-[var(--text)]">Analyst sign-in</h1>
+          <p className="mono mt-1.5 text-[10px] leading-relaxed text-[var(--muted-2)]">
+            Every action you take in the workbench is signed and appended to a
+            tamper-evident ledger.
+          </p>
+          <div className="panel marked mt-6 p-5">
+            <LoginForm />
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

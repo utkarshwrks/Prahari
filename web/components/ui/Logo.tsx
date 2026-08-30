@@ -1,31 +1,25 @@
-import Link from "next/link";
-import { ShieldAlert } from "lucide-react";
+import { Fingerprint } from "lucide-react";
 
-export default function Logo({
-  href = "/",
-  compact = false,
-}: {
-  href?: string;
-  compact?: boolean;
-}) {
+/** PRAHARI — प्रहरी, "the sentinel". Attribution, not surveillance. */
+export default function Logo({ compact = false }: { compact?: boolean }) {
   return (
-    <Link href={href} className="group flex items-center gap-2.5">
-      <span className="flex h-9 w-9 items-center justify-center border border-red bg-red/10 shadow-glow-sm transition group-hover:bg-red/20">
-        <ShieldAlert className="h-5 w-5 text-red-bright" strokeWidth={2} />
+    <span className="flex items-center gap-2.5">
+      <span
+        className="flex h-8 w-8 items-center justify-center border"
+        style={{ borderColor: "var(--accent-dim)", background: "color-mix(in srgb, var(--accent) 10%, transparent)" }}
+      >
+        <Fingerprint className="h-4 w-4" style={{ color: "var(--accent)" }} strokeWidth={1.75} />
       </span>
       <span className="leading-none">
-        <span className="flex items-baseline gap-1.5">
-          <span className="mono text-lg font-bold tracking-[0.28em] text-white">
-            PRAHARI
-          </span>
-          <span className="text-base text-red-bright">प्रहरी</span>
+        <span className="display block text-[15px] font-bold tracking-[0.18em] text-[var(--text)]">
+          PRAHARI
         </span>
         {!compact && (
-          <span className="mono mt-0.5 block text-[9px] tracking-[0.22em] text-muted-2">
-            SENTINEL · THREAT INTEL
+          <span className="mono mt-0.5 block text-[8.5px] uppercase tracking-[0.22em] text-[var(--muted-2)]">
+            Threat actor attribution
           </span>
         )}
       </span>
-    </Link>
+    </span>
   );
 }

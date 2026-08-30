@@ -19,14 +19,14 @@ const DATA_DIR = path.join(process.cwd(), "data");
 const USERS_FILE = path.join(DATA_DIR, "users.json");
 
 // Seeded demo officer — credentials shown on the login page.
-export const DEMO_EMAIL = "officer@mp.gov.in";
+export const DEMO_EMAIL = "analyst@prahari.local";
 export const DEMO_PASSWORD = "prahari123";
 
 const DEMO_USER: AppUser = {
   id: "demo-officer",
   email: DEMO_EMAIL,
-  name: "Officer · MP Cyber Cell",
-  role: "officer",
+  name: "Demo analyst",
+  role: "officer",  // may seal and export; see ROLE_PERMISSIONS
   // hashed once per process from the constant above
   passwordHash: bcrypt.hashSync(DEMO_PASSWORD, 10),
 };
@@ -99,7 +99,7 @@ export async function createUser(
     id: `usr_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
     email,
     name,
-    role: "officer",
+    role: "officer",  // may seal and export; see ROLE_PERMISSIONS
     passwordHash: await bcrypt.hash(input.password, 10),
   };
   fileUsers.push(user);
