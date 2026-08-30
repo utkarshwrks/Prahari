@@ -113,3 +113,57 @@ Phase 1 is **functionally complete and safe to build on**. Phase 2 may begin.
   FINDING-01 (stale emoji debt item), FINDING-02 (two `document.write` sites, not one). All recorded.
 - Four open blockers (B-01 Docker, B-02 Foundry, B-03 Shodan free tier, B-04 manual dataset downloads).
   None resolved by substituting a paid service.
+
+---
+
+## Phase 2 — FOUNDATION — 30 August 2026
+
+### Automated
+
+| Command | Result | Count |
+|---|---|---|
+| `npm test` | **PASS** | 56 passed (3 files) — 45 v1 + 11 mode |
+| `npm run build` | **PASS** | clean, `/api/engine/[...path]` route present |
+| `uv run pytest` | **PASS** | 26 passed |
+| `alembic upgrade / downgrade / upgrade` | **PASS** | 10 tables, 0 enums left behind, sources reseeded |
+| CI guardrails (5 jobs) | **PASS** | emoji, glyphs, `.onion`, secrets, product name — all run locally |
+
+### Manual (author-run, same caveat as Phase 1)
+
+- [x] `docker compose up` brings Neo4j (7474) and Postgres up — **both healthy in 24 s** (budget 60 s)
+- [x] GDS verified usable: `gds.wcc.stream`, `gds.louvain.stream`, `gds.fastRP.stream` all present;
+      GDS 2.13.12. pgvector 0.8.6 with a working L2 distance operator.
+- [x] `uvicorn engine.main:app` starts with **no `.env`**; `/health` and `/version` return JSON
+- [x] `npm run dev` from the repo root; `/login` 200; header shows `DEMO · DATASET · LIVE`
+- [x] All six mode transitions preserve v1 semantics — feed and map clear, counters and alert log
+      persist (11 unit tests, including the no-op case of re-selecting the active mode)
+- [x] DATASET mode shows an honest empty state, not an error:
+      `"No dataset loaded. Phase 3 ingests the Agora and DNM archives."`
+- [x] `/sources` returns 9 seeded rows with `last_scan`, `freshness_s`, `items_24h`, plus `key_present`
+- [x] APScheduler heartbeat visible in `/health` (`running: true`, ticks incrementing)
+- [x] **Engine killed → workbench survives.** `/login` 200, `/api/live-intel` 200, `/api/analyze` 200,
+      and `/api/engine/feed` returns HTTP 200 with
+      `{ok: false, engine: "offline", detail: "Engine unreachable. DEMO and LIVE modes are unaffected."}`
+
+**Trust boundary verified.** Scanned the built client bundles for `ENGINE_URL`, `localhost:8000`,
+`gsk_`, `NEXTAUTH_SECRET` — **zero hits**. The proxy's route allowlist rejects unlisted paths
+(`/api/engine/openapi.json` and `/api/engine/admin` both 404). One grep hit on `prahari123` was traced
+to the demo password intentionally displayed on the login page (v1 behaviour), not a leak.
+
+### Claude
+
+**Not run.** D3.1 with N = 2 plus the devtools-leak probe, in a fresh session.
+
+### Verdict
+
+**PASS — automated and manual layers green. Claude independent review outstanding.**
+
+Every Phase 2 acceptance criterion met: `docker compose up`, `uvicorn` and `npm run dev` all start from
+a clean state with no `.env`; the v1 demo journey is behaviourally untouched; `/sources` returns JSON;
+all tests pass.
+
+### Defect found and fixed
+
+**DEC-016 (Major)** — Postgres ENUM not dropped on downgrade, making the migration non-reversible.
+Found by the up/down/up test, not by review. Fresh clones worked; rebuilds failed with
+`DuplicateObject`. Fixed, and guarded by `test_up_down_up_is_clean`.

@@ -1,11 +1,17 @@
 "use client";
 
-import { Volume2, VolumeX, Zap, MessageSquare, MessageSquareOff } from "lucide-react";
-import { useIntel } from "@/store/intel";
+import { Volume2, VolumeX, MessageSquare, MessageSquareOff } from "lucide-react";
+import { useIntel, FEED_MODES, type FeedMode } from "@/store/intel";
+
+const MODE_HINT: Record<FeedMode, string> = {
+  DEMO: "Synthetic feed. Boosted rate, guaranteed early in-zone breaches.",
+  DATASET: "Real listings from the engine (public academic archives).",
+  LIVE: "Real public OSINT: Hacker News, Google News, Reddit.",
+};
 
 export default function HeaderControls() {
-  const demoMode = useIntel((s) => s.demoMode);
-  const setDemoMode = useIntel((s) => s.setDemoMode);
+  const mode = useIntel((s) => s.mode);
+  const setMode = useIntel((s) => s.setMode);
   const muted = useIntel((s) => s.muted);
   const toggleMute = useIntel((s) => s.toggleMute);
   const toastsEnabled = useIntel((s) => s.toastsEnabled);
@@ -13,26 +19,34 @@ export default function HeaderControls() {
 
   return (
     <div className="flex items-center gap-2">
-      <button
+      {/* Three-way feed source. Switching clears the feed and the map but keeps
+          the cumulative counters and the alert log — v1 setDemoMode semantics. */}
+      <div
         data-tour="demo"
-        onClick={() => setDemoMode(!demoMode)}
-        title="Demo mode boosts intercept rate & guarantees early breaches"
-        className={`mono flex items-center gap-1.5 border px-2.5 py-1.5 text-[10px] uppercase tracking-[0.15em] transition ${
-          demoMode
-            ? "border-red bg-red/10 text-red-bright shadow-glow-sm"
-            : "border-border bg-panel-2 text-muted hover:text-text"
-        }`}
+        role="radiogroup"
+        aria-label="Feed source"
+        className="mono flex items-stretch border border-border bg-panel-2"
       >
-        <Zap className="h-3 w-3" strokeWidth={2} />
-        Demo
-        <span
-          className={`ml-0.5 h-3 w-6 p-0.5 transition ${demoMode ? "bg-red/40" : "bg-white/10"}`}
-        >
-          <span
-            className={`block h-2 w-2 bg-white transition-transform ${demoMode ? "translate-x-3" : "translate-x-0"}`}
-          />
-        </span>
-      </button>
+        {FEED_MODES.map((m) => {
+          const active = mode === m;
+          return (
+            <button
+              key={m}
+              role="radio"
+              aria-checked={active}
+              onClick={() => setMode(m)}
+              title={MODE_HINT[m]}
+              className={`px-2.5 py-1.5 text-[10px] uppercase tracking-[0.15em] transition ${
+                active
+                  ? "bg-red/15 text-red-bright shadow-glow-sm"
+                  : "text-muted hover:text-text"
+              }`}
+            >
+              {m}
+            </button>
+          );
+        })}
+      </div>
 
       <button
         onClick={toggleToasts}
