@@ -64,6 +64,9 @@ export default function Home() {
             <Link href="/about" className="mono text-[10px] uppercase tracking-[0.16em] text-[var(--muted-2)] transition hover:text-[var(--text)]">
               How it works
             </Link>
+            <Link href="/docs" className="mono text-[10px] uppercase tracking-[0.16em] text-[var(--muted-2)] transition hover:text-[var(--text)]">
+              Docs
+            </Link>
             <Link href="/workbench" className="mono border border-[var(--border-2)] px-3 py-1.5 text-[10px] uppercase tracking-[0.16em] text-[var(--muted)] transition hover:border-[var(--accent-dim)] hover:text-[var(--c-high)]">
               Workbench
             </Link>
