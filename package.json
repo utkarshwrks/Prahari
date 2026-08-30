@@ -18,7 +18,10 @@
     "db:up": "docker compose up -d",
     "db:down": "docker compose down",
     "db:reset": "docker compose down -v && docker compose up -d",
-    "migrate": "cd engine && uv run alembic upgrade head"
+    "migrate": "cd engine && uv run alembic upgrade head",
+    "demo": "bash scripts/demo.sh",
+    "e2e": "node web/e2e/journey.mjs",
+    "test:all": "npm test && (cd engine && uv run pytest -q) && (cd anchor && forge test)"
   },
   "devDependencies": {
     "happy-dom": "^20.12.0"

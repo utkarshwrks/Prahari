@@ -5,6 +5,7 @@ import "server-only";
 import { promises as fs } from "fs";
 import path from "path";
 import bcrypt from "bcryptjs";
+import { DEMO_ACCOUNT_ENABLED } from "./authConfig";
 
 export interface AppUser {
   id: string;
@@ -53,7 +54,10 @@ async function readFileUsers(): Promise<AppUser[]> {
 /** All users = seeded demo + everyone who signed up. */
 export async function getAllUsers(): Promise<AppUser[]> {
   const fileUsers = await readFileUsers();
-  return [DEMO_USER, ...fileUsers];
+  // The demo officer's credentials are printed on the login page and committed
+  // to this repository. Correct for a pitch, indefensible for a deployment
+  // holding investigative data -- so it simply does not exist in production.
+  return DEMO_ACCOUNT_ENABLED ? [DEMO_USER, ...fileUsers] : fileUsers;
 }
 
 export async function findUserByEmail(email: string): Promise<AppUser | null> {
