@@ -135,3 +135,22 @@ Phase 3 must add a normalisation/alias layer between extraction and the gazettee
 `jabalpore`, Devanagari `जबलपुर`, etc.), and the extraction P/R table in `docs/METRICS.md` must measure
 recall *after* normalisation, not before. Not fixed in Phase 1 — it is Phase 3 scope and needs the
 Hinglish lexicon that phase introduces.
+
+---
+
+## Phase 2 — Foundation
+
+### DEC-014 — Container memory is pinned, not negotiated.
+Docker Desktop on the build machine allocates ~8.3 GB. Neo4j's default heap sizing inspects host memory
+and claims aggressively, which starves Postgres and, later, CPU inference in Phase 5. `docker-compose.yml`
+therefore pins Neo4j to 1 GB heap + 512 MB pagecache (2 GB container limit) and Postgres to 1 GB.
+
+Verified sufficient for the testbed scale (thousands of personas, not millions). If Phase 5 hits memory
+pressure, raise Docker Desktop to 12 GB rather than unpinning these — unpinned Neo4j is what breaks first.
+
+### DEC-015 — Neo4j healthcheck uses `cypher-shell`, not a port probe.
+Neo4j binds 7687 well before it can answer queries. A TCP healthcheck reports healthy while the first
+real query still fails, which would make `npm run demo` flaky in exactly the way Phase 10 must not be.
+The healthcheck runs `RETURN 1` over Bolt so "healthy" means "answering queries".
+
+Measured cold start with this healthcheck: **24 s** for both services (playbook budget: 60 s).
