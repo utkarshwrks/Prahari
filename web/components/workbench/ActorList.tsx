@@ -1,10 +1,25 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Search, Users } from "lucide-react";
+import { ChevronRight, Search, Users } from "lucide-react";
 import { api, type ActorRow } from "@/lib/api";
-import Confidence, { confidenceColor } from "../ui/Confidence";
+import { confidenceColor } from "../ui/Confidence";
 import Panel from "../ui/Panel";
+
+// Bands so a list of 120 actors reads as structure, not a wall of identical
+// bars. Rows arrive already sorted by confidence, so bucketing preserves order.
+const BANDS = [
+  { id: "high", label: "Strong case", min: 0.9 },
+  { id: "med", label: "Worth a look", min: 0.75 },
+  { id: "low", label: "Weak / unresolved", min: -1 },
+] as const;
+
+function bandOf(c: number | null): string {
+  if (c == null) return "low";
+  if (c >= 0.9) return "high";
+  if (c >= 0.75) return "med";
+  return "low";
+}
 
 /**
  * The actor list — the entry point to the whole workbench.
@@ -22,6 +37,13 @@ export default function ActorList({
   const [minConf, setMinConf] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+
+  const grouped = useMemo(() => {
+    const g: Record<string, ActorRow[]> = { high: [], med: [], low: [] };
+    for (const r of rows) g[bandOf(r.attribution_confidence)].push(r);
+    return g;
+  }, [rows]);
 
   useEffect(() => {
     let alive = true;
@@ -108,64 +130,72 @@ export default function ActorList({
           </p>
         )}
 
-        <ul className="space-y-1">
-          {rows.map((a) => {
-            const active = a.actor_id === selected;
+        <div className="space-y-2">
+          {BANDS.map((band) => {
+            const items = grouped[band.id];
+            if (!items || items.length === 0) return null;
+            const isCollapsed = collapsed[band.id];
+            const dot = band.id === "high" ? "var(--c-high)" : band.id === "med" ? "var(--c-mid)" : "var(--c-low)";
             return (
-              <li key={a.actor_id}>
+              <section key={band.id}>
                 <button
-                  onClick={() => onSelect(a.actor_id)}
-                  aria-current={active ? "true" : undefined}
-                  className={`w-full border px-2.5 py-2 text-left transition ${
-                    active
-                      ? "border-[var(--accent-dim)] bg-[color-mix(in_srgb,var(--accent)_8%,transparent)]"
-                      : "border-transparent hover:border-[var(--border-2)] hover:bg-[var(--surface-2)]"
-                  }`}
+                  onClick={() => setCollapsed((c) => ({ ...c, [band.id]: !c[band.id] }))}
+                  className="mono sticky top-0 z-[1] flex w-full items-center gap-1.5 bg-[color-mix(in_srgb,var(--surface)_88%,transparent)] px-1 py-1.5 text-left text-[9px] uppercase tracking-[0.14em] text-[var(--muted-2)] backdrop-blur"
                 >
-                  <span className="flex items-baseline justify-between gap-2">
-                    <span className="mono truncate text-[12px] text-[var(--text)]">
-                      {a.label}
-                    </span>
-                    <span
-                      className="mono tnum shrink-0 text-[12px] font-bold"
-                      style={{ color: confidenceColor(a.attribution_confidence) }}
-                    >
-                      {a.attribution_confidence == null
-                        ? "—"
-                        : a.attribution_confidence.toFixed(2)}
-                    </span>
-                  </span>
-
-                  <span className="mt-1 flex items-center gap-1.5">
-                    <Users className="h-2.5 w-2.5 text-[var(--muted-2)]" />
-                    <span className="mono text-[9px] text-[var(--muted-2)]">
-                      {a.personas} persona{a.personas === 1 ? "" : "s"} ·{" "}
-                      {a.markets.slice(0, 2).join(", ")}
-                      {a.markets.length > 2 ? ` +${a.markets.length - 2}` : ""}
-                    </span>
-                  </span>
-
-                  <span className="bar mt-1.5 block">
-                    <span
-                      style={{
-                        width: `${Math.round((a.attribution_confidence ?? 0) * 100)}%`,
-                        background: confidenceColor(a.attribution_confidence),
-                      }}
-                    />
-                  </span>
-
-                  {a.flags.length > 0 && (
-                    <span className="mt-1.5 flex flex-wrap gap-1">
-                      {a.flags.map((f) => (
-                        <span key={f} className="chip chip-accent">{f}</span>
-                      ))}
-                    </span>
-                  )}
+                  <ChevronRight className={`h-3 w-3 transition-transform ${isCollapsed ? "" : "rotate-90"}`} />
+                  <span className="h-1.5 w-1.5 rounded-full" style={{ background: dot }} />
+                  {band.label}
+                  <span className="tnum ml-auto text-[var(--muted-2)]">{items.length}</span>
                 </button>
-              </li>
+
+                {!isCollapsed && (
+                  <ul className="mt-0.5 space-y-0.5">
+                    {items.map((a) => {
+                      const active = a.actor_id === selected;
+                      const color = confidenceColor(a.attribution_confidence);
+                      return (
+                        <li key={a.actor_id}>
+                          <button
+                            onClick={() => onSelect(a.actor_id)}
+                            aria-current={active ? "true" : undefined}
+                            className={`group flex w-full items-center gap-2.5 rounded-[var(--radius)] border px-2.5 py-2 text-left transition ${
+                              active
+                                ? "border-[var(--accent-dim)] bg-[color-mix(in_srgb,var(--accent)_10%,transparent)]"
+                                : "border-transparent hover:border-[var(--border-2)] hover:bg-[var(--surface-2)]"
+                            }`}
+                          >
+                            {/* confidence as a single dot, not a repeated bar */}
+                            <span
+                              className="h-2 w-2 shrink-0 rounded-full"
+                              style={{ background: color, boxShadow: active ? `0 0 7px ${color}` : "none" }}
+                              title={a.attribution_confidence == null ? "unscored" : `confidence ${a.attribution_confidence.toFixed(2)}`}
+                            />
+                            <span className="min-w-0 flex-1">
+                              <span className="flex items-baseline justify-between gap-2">
+                                <span className="mono truncate text-[12px] text-[var(--text)]">{a.label}</span>
+                                <span className="mono tnum shrink-0 text-[10px]" style={{ color }}>
+                                  {a.attribution_confidence == null ? "—" : a.attribution_confidence.toFixed(2)}
+                                </span>
+                              </span>
+                              <span className="mono mt-0.5 flex items-center gap-1 text-[9px] text-[var(--muted-2)]">
+                                <Users className="h-2.5 w-2.5" />
+                                {a.personas}p · {a.markets.slice(0, 2).join(", ")}
+                                {a.markets.length > 2 ? ` +${a.markets.length - 2}` : ""}
+                                {a.flags.length > 0 && (
+                                  <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[var(--accent)]" title={a.flags.join(" · ")} />
+                                )}
+                              </span>
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </section>
             );
           })}
-        </ul>
+        </div>
       </div>
     </Panel>
   );
