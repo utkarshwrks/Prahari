@@ -191,13 +191,45 @@ strictly easier. See DEC-021.
 
 | Metric | Value |
 |---|---|
-| Mean `s_style`, true pairs | |
-| Mean `s_style`, decoy pairs | |
-| Separation (must be > 0) | |
-| Rebrand case detected | |
-| `mimicry_suspected` fires on decoy | |
-| `llm_rewrite_suspected` fires on paraphrase | |
-| Model used (siamese / classic fallback) | |
+| Mean `s_style`, true pairs | **0.5942** |
+| Mean `s_style`, unrelated pairs | 0.5314 |
+| Separation | **+0.0628** (> 0 required) |
+| **Decoy `s_style`** | **0.2000** (capped) |
+| Decoy raw char-n-gram similarity | **0.8272** — genuinely reads like its target |
+| Rebrand `s_style` | **0.8432** |
+| Decoy < rebrand | **yes** — the Phase 5 inversion |
+| `mimicry_suspected` fires on decoy | **yes** |
+| Rebrand case detected | **yes**, rank 1 of 1, correct dates, gap 5 d |
+| Model used | **logistic** (Siamese cut, DEC-023) |
+
+### Authorship verifier (DEC-023)
+
+| Metric | Value |
+|---|---|
+| ROC AUC | 0.7976 |
+| Accuracy | 0.7068 |
+| Train / test pairs | 445 / 191 |
+
+| Feature | Learned weight |
+|---|---|
+| `char_ngram` | **+3.4000** |
+| `hinglish_diff` | **-3.0039** |
+| `punct_cosine` | +1.7887 |
+| `honorific_diff` | -0.4257 |
+| `ttr_diff` | -0.3281 |
+
+The Hinglish ratio is the **second-strongest feature in the model** — direct evidence the Hinglish
+markers earn their place rather than being decoration for an Indian-jurisdiction pitch.
+
+### LLM-rewrite detector (DEC-024)
+
+Burstiness across 244 personas: min 0.102, median 0.205, max 0.385.
+
+| | Absolute threshold | Relative (5th percentile) |
+|---|---|---|
+| False positives on genuine personas | 206 / 244 (**84%**) | **11 / 244 (4.5%)** |
+| Catches genuinely flattened text | — | **yes** (burstiness 0.000) |
+| With no reference corpus | fired anyway | **abstains** |
 
 ---
 
