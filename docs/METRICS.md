@@ -57,20 +57,80 @@ Acceptance: `0.84 ± 0.01` and `0.999 ± 0.001`.
 
 Fail thresholds: location recall **≥ 0.85 English**, **≥ 0.70 Hinglish**.
 
+Measured on the 30 hand-labelled sentences in `engine/tests/test_extract.py`,
+**after gazetteer normalisation** — that is what the geofence actually receives, and an
+extraction the gazetteer cannot resolve is a dropped breach, not a success (FINDING-07).
+
 | Entity type | Language | Precision | Recall | F1 | Engine |
 |---|---|---|---|---|---|
-| Location | English | | | | |
-| Location | Hinglish | | | | |
-| Wallet (BTC) | — | | | | |
-| Wallet (ETH) | — | | | | |
-| PGP fingerprint | — | | | | |
-| Onion v3 | — | | | | |
-| Handle | English | | | | |
-| Handle | Hinglish | | | | |
-| Contraband category | English | | | | |
-| Contraband category | Hinglish | | | | |
+| Location | English (15 sentences) | 1.000 | 1.000 | 1.000 | regex + gazetteer + spaCy |
+| Location | Hinglish (15 sentences) | 1.000 | 1.000 | 1.000 | regex + gazetteer + spaCy |
+| Wallet (BTC / ETH / XMR) | — | 1.000 | 1.000 | 1.000 | regex |
+| Onion v3 | — | 1.000 | 1.000 | 1.000 | regex |
+| PGP fingerprint | — | 1.000 | 1.000 | 1.000 | regex + pgpy |
+| Handle / email / telegram | — | 1.000 | 1.000 | 1.000 | regex (masked) |
 
-Blocklist drops (how-to / synthesis content suppressed): _pending_
+**Read this before quoting the 1.000.** The labelled sentences and the alias table were
+authored together, so these figures are a **regression guard, not a generalisation estimate**.
+An independent probe of surface forms deliberately absent from the alias table scores
+**7/10** — all three misses are unseen misspellings (`jabalpurr`, `jabalpr`, `JBL`), and
+**zero are false positives**.
+
+That asymmetry is a deliberate design choice, not an accident: matching is exact-alias with no
+fuzzy fallback, because a fabricated city manufactures a geofence breach that never happened.
+For a police tool that is strictly worse than missing one. `"kanti"` sits one transposition from
+`"Katni"` and must not match; any fuzzy matcher loose enough to catch `"jabalpr"` catches that too.
+Both directions are pinned by tests (`test_never_invents_a_city`,
+`test_known_limit_unseen_typos_are_missed`).
+
+| Normalisation | Value |
+|---|---|
+| Aliases loaded | 43 |
+| Region terms explicitly refused (`MP`, `India`, …) | 6 |
+
+### Blocklist — content rule enforcement
+
+Measured over the **full** 109,689-row Agora dataset:
+
+| Metric | Value |
+|---|---|
+| Rows read | 109,689 |
+| Rows skipped (malformed) | 0 |
+| **Listing bodies dropped as synthesis / how-to** | **1,832 (1.67%)** |
+| Personas extracted | 3,192 |
+
+The listing itself is retained when its body is dropped — that a vendor offered a category is
+exactly what we analyse; the instructions are what we refuse to store or render.
+
+---
+
+## 3b. Testbed — Phase 3
+
+The only labelled dataset in PRAHARI, and therefore the source of every metric below
+(DEC-018). Fixed seed `20260920`; same seed produces a byte-identical label digest.
+
+| Property | Value |
+|---|---|
+| Personas | 244 |
+| Posts | 2,928 |
+| Labelled pairs | 3,340 |
+| **Positive (same actor)** | **159** |
+| Negative | 3,181 (20:1, capped) |
+| must-not-link | 1 (the decoy) |
+| Label digest (seed 20260920) | `3384a260be7e60c2…` |
+
+Sized so Phase 7 can calibrate: an earlier 40-actor configuration yielded only 21 positives,
+which would have left ~10 in the validation split — statistically useless for a conformal
+coverage guarantee at α = 0.05.
+
+**The four injected cases**
+
+| Case | Solvable by | Purpose |
+|---|---|---|
+| multi-persona | shared PGP or wallet (82% of pairs) | proves linkage works |
+| rebrand | temporal + style + wallet **lineage** | distinct addresses joined by a transfer edge, so it is *not* solvable by hard identifier alone |
+| infra leak | onion v3 → cert CN | proves passive infrastructure pivoting |
+| **decoy** | must-not-link | verbatim copied bio, same style, overlapping window, **different PGP and wallet** — the false positive a defence lawyer would construct |
 
 ---
 

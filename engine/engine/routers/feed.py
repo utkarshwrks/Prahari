@@ -10,16 +10,23 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Query
 
+from ..ingest.dataset import page
+
 router = APIRouter(tags=["feed"])
 
 
 @router.get("/feed")
-def feed(limit: int = Query(default=20, ge=1, le=100)) -> dict[str, object]:
+def feed(
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> dict[str, object]:
+    result = page(limit=limit, offset=offset)
     return {
         "ok": True,
         "mode": "dataset",
-        "items": [],
-        "count": 0,
-        # An honest empty state, not an error. The UI renders this verbatim.
-        "detail": "No dataset loaded. Phase 3 ingests the Agora and DNM archives.",
+        "source": "Agora 2014-2015 (public academic dataset)",
+        # Stated in the payload so the UI cannot imply otherwise: this dataset
+        # carries no Madhya Pradesh geography and no timestamps (DEC-018).
+        "geofenced": False,
+        **result,
     }

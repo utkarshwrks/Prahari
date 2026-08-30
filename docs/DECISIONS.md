@@ -175,3 +175,36 @@ Collapsing both into a 503 would make the two indistinguishable from the browser
 
 `/health` therefore stays 200 and carries the truth in `checks.database`. A non-200 from `/health` means
 the process itself is gone.
+
+---
+
+## Phase 3 — Data
+
+### DEC-018 — What the real Agora dataset can and cannot support.
+Measured on the actual file before any code was written: 109,689 listings, 3,192 vendors (3,061 with more
+than one listing), columns `Vendor, Category, Item, Item Description, Price, Origin, Destination, Rating,
+Remarks`. Three gaps materially change what DATASET mode can claim.
+
+| Gap | Measured | Consequence |
+|---|---|---|
+| **No timestamp column** | zero date/time fields | The `temporal` root has no real-data source. Posting-hour and inter-post-interval features, `ruptures` rebrand detection (Phase 5) and the "overlapping active window" blocking rule (Phase 4) run on the **testbed only**. |
+| **PGP effectively absent** | 107 blocks in 109,689 listings (~0.1%), no PGP column | `identity_key` is the strongest signal (0.95 `SIGNED_WITH`) and real data barely supplies it. Hard-identifier linkage is demonstrated on the testbed; Agora supplies `social` and `linguistic` roots. |
+| **No Madhya Pradesh geography** | 0 MP city mentions, 243 "India", 1,122 India-origin | The geofence has no hook in Agora. It stays a DEMO-mode story. |
+
+**Division of labour, stated so it is never blurred on stage:**
+
+- **DEMO** — synthetic, MP-focused. Carries the geofence.
+- **DATASET** — real Agora. Carries linkage and stylometry over 3,061 multi-listing vendors.
+- **Testbed** — labelled synthetic ground truth. Carries **every metric** in `docs/METRICS.md`.
+
+Consequence for Phase 10: the landing page and deck must attribute metrics to the testbed, not to Agora.
+Implying otherwise is the kind of claim a judge breaks with one question.
+
+What Agora *does* supply and no synthetic source could: genuine vendor prose across 3,061 multi-listing
+vendors — a real stylometry corpus — plus 1,490 onion references, 247 emails and 12 BTC addresses.
+
+### DEC-019 — Gwern DNM Archives deferred, not dropped.
+The archives are daily crawls and therefore **do** carry timestamps, which is exactly what Agora lacks.
+They are also a very large manual/torrent fetch. Phase 3 ships the loader against the documented format
+and a committed fixture; the full download is a Phase 10 nice-to-have, not a demo dependency.
+Recorded so the temporal gap in DEC-018 is understood as addressable, not inherent.

@@ -67,13 +67,29 @@ def test_version_lists_capabilities():
 
 
 def test_feed_returns_v1_intercept_envelope():
+    """Phase 3 replaced the empty stub with real Agora listings."""
     with client() as c:
-        body = c.get("/feed").json()
+        body = c.get("/feed?limit=5").json()
     assert body["ok"] is True
-    assert body["items"] == []
-    assert body["count"] == 0
-    # An honest empty state, never an error - the DATASET-mode acceptance test.
-    assert body["detail"]
+    assert isinstance(body["items"], list)
+    assert body["count"] == len(body["items"])
+    if body["items"]:
+        item = body["items"][0]
+        for k in ("id", "source", "rawText", "entities", "severity"):
+            assert k in item
+    else:
+        # No fixture present: must still be an honest empty state, not an error.
+        assert body["detail"]
+
+
+def test_feed_declares_that_the_dataset_is_not_geofenced():
+    """DEC-018: Agora carries no MP geography. The payload says so explicitly so
+    the UI cannot imply a DATASET item breached the Jabalpur zone."""
+    with client() as c:
+        body = c.get("/feed?limit=5").json()
+    assert body["geofenced"] is False
+    for item in body["items"]:
+        assert item["entities"]["locations"] == []
 
 
 def test_feed_respects_limit_bounds():
