@@ -24,7 +24,7 @@ export default function BreachToaster() {
           <AlertTriangle className="mt-0.5 h-4 w-4 animate-pulse text-red-bright" />
           <div className="min-w-0">
             <div className="mono text-[11px] font-semibold uppercase tracking-[0.14em] text-red-bright">
-              ⚠ Geofence Breach
+              Geofence Breach
             </div>
             <div className="mono mt-0.5 text-sm font-bold tracking-wide text-text">
               {lastBreach.city.toUpperCase()}

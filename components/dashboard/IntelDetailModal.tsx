@@ -3,7 +3,7 @@
 import { createPortal } from "react-dom";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { X, MapPin, FolderPlus, Radar, Flag, Bitcoin, AtSign, Clock as ClockIcon, ExternalLink, Radio } from "lucide-react";
+import { X, MapPin, FolderPlus, Radar, Flag, Bitcoin, AtSign, Clock as ClockIcon, ExternalLink, Radio, Check, AlertTriangle } from "lucide-react";
 import { Intercept } from "@/lib/mockIntel";
 import { useIntel } from "@/store/intel";
 import { useRecords } from "@/store/records";
@@ -48,8 +48,9 @@ export default function IntelDetailModal({
       sourceText: intercept.rawText,
     });
     toast.custom(() => (
-      <div className="mono border border-red bg-panel px-3 py-2 text-[12px] text-text shadow-glow">
-        ✓ Case <span className="text-red-bright">{id}</span> created
+      <div className="mono flex items-center gap-1.5 border border-red bg-panel px-3 py-2 text-[12px] text-text shadow-glow">
+        <Check className="h-3 w-3 shrink-0 text-red-bright" />
+        Case <span className="text-red-bright">{id}</span> created
       </div>
     ));
     onClose();
@@ -92,8 +93,9 @@ export default function IntelDetailModal({
         </div>
 
         {inZone && (
-          <div className="mono mt-3 border border-red/40 bg-red/10 px-2 py-1.5 text-[10px] uppercase tracking-widest text-red-bright">
-            ⚠ In-zone jurisdiction hit
+          <div className="mono mt-3 flex items-center gap-1.5 border border-red/40 bg-red/10 px-2 py-1.5 text-[10px] uppercase tracking-widest text-red-bright">
+            <AlertTriangle className="h-3 w-3 shrink-0" />
+            In-zone jurisdiction hit
           </div>
         )}
 

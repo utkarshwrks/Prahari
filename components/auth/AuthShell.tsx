@@ -1,5 +1,6 @@
 import { ReactNode } from "react";
 import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import Logo from "../ui/Logo";
 
 /** Centered red/black auth layout with the tactical grid backdrop. */
@@ -20,9 +21,10 @@ export default function AuthShell({
         <Logo />
         <Link
           href="/"
-          className="mono text-[11px] uppercase tracking-[0.16em] text-muted transition hover:text-text"
+          className="mono flex items-center gap-1.5 text-[11px] uppercase tracking-[0.16em] text-muted transition hover:text-text"
         >
-          ← Back to site
+          <ArrowLeft className="h-3 w-3" />
+          Back to site
         </Link>
       </div>
 
