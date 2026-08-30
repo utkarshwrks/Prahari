@@ -515,3 +515,109 @@ documentation, another detached the opener before testing focus restoration. Bot
 MapLibre GL, react-force-graph-3d, the d3 Sankey and the timeline scrubber are deferred as **roadmap**.
 Leaflet works; tilt is presentation, not capability. Everything carrying the two USPs was built, and
 the responsive, motion and accessibility contracts are verified at all three widths.
+
+---
+
+## Phase 11 — MASTER TESTING — 31 August 2026
+
+Nothing was built in this phase. The system was attacked and had to hold.
+
+### Objective 1 — Fresh-machine run
+
+Cloned to a clean directory, installed following only `README.md`.
+
+**This is where the gate earned its place. The first fresh clone FAILED.**
+
+| Step | Result |
+|---|---|
+| Clone contents | no `.env.local`, no `node_modules`, no `.venv`, fixture present (1,001 rows) |
+| First engine run | **26 failed, 15 errors — `ModuleNotFoundError`** |
+| After manifest fix | **236/236 passed** |
+| `npm run demo` | **12 s** (budget 180 s) |
+| Seven demo steps | **7/7 correct** in 14 s |
+
+### Objective 2 — Full suite on the fresh clone
+
+| Suite | Result |
+|---|---|
+| `npm test` | **98 passed** |
+| `npm run build` | clean *(after the second fix — see below)* |
+| `uv run pytest` | **236 passed** |
+| `forge test` | **12 passed** |
+| Browser journey | **25 assertions** |
+
+### Objective 4 — Metrics reproduction
+
+Two consecutive `python -m engine.fusion.eval` runs produced **byte-identical** output. Every figure now
+appears **verbatim at tool precision** in `docs/METRICS.md`, the landing page and `docs/DECK.md`:
+`0.031348`, `0.029851`, `0.005333`, `0.005083`, `0.9381`.
+
+The document previously rounded the false-merge rate to `0.0313`. A rounding is still a disagreement an
+opposing expert can point at, so the document now carries what the tool emits.
+
+### Objective 6 — Offline drill
+
+Everything on the demo's critical path runs with no external network: DEMO geofence, DATASET feed
+(committed fixture), fusion, graph, infra pivot (planted metadata), seal (local Anvil), verify.
+Network-dependent paths (LIVE OSINT, live CT lookup) degrade and report, never error.
+
+### Objective 7 — Failure drill
+
+| Killed | Behaviour | Recovery |
+|---|---|---|
+| Postgres | engine up, `db:false`, fusion + audit unaffected | **healed, no restart** |
+| Neo4j | graph unavailable with a reason, rest unaffected | **healed, no restart** |
+| Chain | seal `UNAVAILABLE`, no explorer link, **ledger still verifies offline** | — |
+| Engine | web fully alive, every engine route HTTP 200 + `engine: offline` | — |
+
+Nothing returned 5xx at any point.
+
+### Objective 9 — Security sweep: **11/11**
+
+Production refuses to boot without `NEXTAUTH_SECRET` and refuses the dev default; demo account off in
+production; RBAC enforced; both unauthenticated endpoints rate limited; exports escaped; no engine URL
+or key in client bundles; only 32-byte hashes on chain; no outbound `.onion` possible; `.env.local`
+untracked; no committed keys.
+
+### Objective 10 — Global-rule sweep: **10/10**
+
+Emoji grep empty; no decorative glyphs in rendered UI; product name is PRAHARI everywhere; no paid
+service; manifests complete; no unresolved `planned` rows; roadmap items honestly marked; METRICS has
+no pending cells; DECK lists claims to remove.
+
+*(One initial "paid service" hit was my own grep matching "magnetic stripe" in the Agora dataset
+fixture — real marketplace text, not a dependency.)*
+
+### Defects found by the gate
+
+| ID | Severity | Finding |
+|---|---|---|
+| **DEC-050** | **Major** | **The dependency manifest was incomplete.** Phases 3–8 installed 16 packages ad-hoc with `uv pip install`; they worked on the build machine and existed nowhere else. A fresh clone failed with `ModuleNotFoundError` on 26 tests — exactly what a judge's laptop and the CI runner would have seen. |
+| **DEC-051** | **Major** | **The Phase 10 production guard broke `npm run build`.** `next build` runs with `NODE_ENV=production`, so the import-time secret check failed the build on any machine without a secret. A build authenticates nobody; a running server does. Build phase exempted via `NEXT_PHASE`; the runtime guard is unchanged and verified. |
+
+### Objectives NOT completed, stated plainly
+
+- **Objective 5 — manual checklists by two teammates who did not write the phase.** Not done. Every
+  manual layer in this log was author-run. That satisfies the checklist mechanically and **not** the
+  independence intent.
+- **Objective 8 — Claude master review** (D3.1 with N=ALL, plus D3.2–D3.5) in a fresh session. Not run.
+  D3.1 explicitly requires "an independent reviewer, not the author".
+- **Objective 3 — Lighthouse** not run.
+- **Objective 11 — Sepolia contract address and a public tx hash.** The contract, its tests and the full
+  seal/verify flow are real and exercised end to end, but **only on local Anvil**. Nothing has been
+  anchored on Sepolia.
+
+### VERDICT
+
+**RELEASE GATE: CONDITIONAL PASS.**
+
+Every objective that can be verified mechanically passes, including the two that failed first and were
+fixed. The automated evidence is complete: **371 tests green on a genuinely fresh clone**.
+
+The gate is **not** a full PASS, because three of its twelve objectives require a second person or a
+fresh reviewer, and one requires a public-chain transaction that has not been made. Recording that as a
+pass would be the precise failure this phase exists to prevent.
+
+**Tag `v2.0-sih` when:** the D3.1 review returns PASS in a fresh session, two teammates run the manual
+checklists, and either a Sepolia seal is recorded in `docs/QA.md` or the deck says
+"Sepolia-ready, demonstrated on a local chain".
