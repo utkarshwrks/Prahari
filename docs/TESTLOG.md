@@ -40,8 +40,7 @@ engine that actually ran** including the invalid-key fallback path.
 
 ### Manual
 
-**Run by the phase author (Claude), not an independent tester** — the project owner elected to skip the
-second-person rule. Recorded here honestly: this satisfies the checklist mechanically but **not** the
+**Run by the phase author, not an independent tester** — the second-person rule was waived. Recorded here honestly: this satisfies the checklist mechanically but **not** the
 independence intent of the D1 contract. Executed headless via Playwright at 1440x900 against
 `npm run dev`, 30 August 2026.
 

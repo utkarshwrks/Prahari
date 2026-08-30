@@ -37,7 +37,8 @@ anchor/broadcast/
 # os / editor
 .DS_Store
 npm-debug.log*
-.claude/settings.local.json
+# local editor/tooling state
+.claude/
 
 # scratch
 __shot.mjs
