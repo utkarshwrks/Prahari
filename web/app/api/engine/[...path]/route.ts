@@ -12,7 +12,11 @@ import { NextRequest, NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 
 const ENGINE_URL = process.env.ENGINE_URL ?? "http://localhost:8000";
-const TIMEOUT_MS = 8000;
+// 8s was too tight. Fusion and audit routes do real computation -- Splink
+// training and profile building -- and a cold first call took ~20s, which the
+// proxy reported as "engine offline" on a healthy engine. The engine now warms
+// at startup; this ceiling is the backstop for a genuinely slow first call.
+const TIMEOUT_MS = 45_000;
 
 // Only these prefixes may be proxied. An allowlist rather than a passthrough so
 // a future engine admin route cannot be reached from the browser by guessing.

@@ -10,6 +10,7 @@ failing at import. See docs/ARCHITECTURE.md section 7.
 from __future__ import annotations
 
 import logging
+import threading
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -38,6 +39,30 @@ async def lifespan(app: FastAPI):
             # Degradation is announced at boot, never discovered at demo time.
             log.warning("capability disabled", extra={"capability": name, "reason": cap["detail"]})
     start_scheduler()
+
+    # Warm the expensive caches in the background.
+    #
+    # The first request that touches fusion or the audit ledger triggers Splink
+    # training and profile building -- about 20 seconds on a cold process. The
+    # Phase 11 judge-simulation run caught this: the first click on the Audit
+    # panel exceeded the proxy timeout and rendered as "engine offline" on a
+    # perfectly healthy engine. The development machine never saw it because it
+    # was always warm.
+    #
+    # Warming in a thread keeps boot fast while making the first real request
+    # fast too.
+    def _warm() -> None:
+        try:
+            from .fusion import eval as _eval
+
+            _eval.build_signals()
+            _eval.ensure_calibrated()
+            log.info("caches warmed")
+        except Exception:  # noqa: BLE001 - warming is an optimisation, never fatal
+            log.warning("cache warm failed; first request will be slow")
+
+    threading.Thread(target=_warm, name="warm", daemon=True).start()
+
     try:
         yield
     finally:
