@@ -414,3 +414,38 @@ body {
   white-space: nowrap;
   border: 0;
 }
+
+/* ==========================================================================
+   Touch targets.
+
+   Gated on `pointer: coarse`, NOT on viewport width. A narrow browser window
+   on a desktop is still driven by a mouse and does not need 44px targets;
+   a phone does, whatever its width. Width is a proxy that gets this wrong in
+   both directions.
+
+   44px is the WCAG 2.5.5 / platform HIG figure. Applied by growing the hit
+   area rather than the visual box, so the instrument-grade density of the
+   control room survives on desktop untouched.
+   ========================================================================== */
+@media (pointer: coarse) {
+  button,
+  a[href],
+  [role="radio"],
+  [role="button"],
+  label:has(input[type="file"]) {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Icon-only controls: keep the glyph its designed size and expand the
+     tappable area around it. */
+  button:has(> svg:only-child) {
+    padding: 0.5rem;
+  }
+
+  /* List rows are full-width already; they only need vertical room. */
+  [role="log"] button,
+  .alert-row {
+    min-width: 0;
+  }
+}

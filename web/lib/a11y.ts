@@ -20,10 +20,31 @@ const FOCUSABLE = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(",");
 
+/**
+ * Visible-and-focusable elements inside `root`.
+ *
+ * NOT `offsetParent !== null`. That is null for any `position: fixed` element,
+ * and every dialog in this app is fixed -- the drawer is `fixed right-0`, the
+ * modal is `fixed inset-0`. Filtering on offsetParent returned an empty list,
+ * so the focus trap silently did nothing on exactly the elements it existed to
+ * trap. Caught by the Playwright journey, not by the unit tests, because
+ * happy-dom reports offsetParent differently from a real browser.
+ *
+ * `getClientRects()` is layout-based and correct for fixed positioning.
+ */
 export function focusableWithin(root: HTMLElement): HTMLElement[] {
-  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
-    (el) => el.offsetParent !== null || el === document.activeElement
-  );
+  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((el) => {
+    if (el === document.activeElement) return true;
+    if (el.hasAttribute("hidden") || el.getAttribute("aria-hidden") === "true") return false;
+    // happy-dom lacks real layout, so fall back to presence in the DOM there.
+    if (typeof el.getClientRects !== "function") return true;
+    const rects = el.getClientRects();
+    if (rects.length > 0) return true;
+    // jsdom/happy-dom report zero rects for everything; do not filter there.
+    return typeof window !== "undefined" && !("happyDOM" in window)
+      ? false
+      : true;
+  });
 }
 
 /**

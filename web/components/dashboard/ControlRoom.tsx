@@ -15,6 +15,8 @@ import JabalpurZoneMonitor from "./panels/JabalpurZoneMonitor";
 import WalletTracker from "./panels/WalletTracker";
 import AlertLog from "./panels/AlertLog";
 import LiveNERAnalyzer from "./panels/LiveNERAnalyzer";
+import EvidenceTrail from "./panels/EvidenceTrail";
+import AuditLedger from "./panels/AuditLedger";
 
 export default function ControlRoom() {
   const start = useIntel((s) => s.start);
@@ -107,6 +109,15 @@ export default function ControlRoom() {
         {/* RIGHT — analytics stack. Each panel is shrink-0 so the column
             SCROLLS instead of flexbox squashing panels into each other. */}
         <div className="slim-scroll flex min-h-0 min-w-0 flex-col gap-2 xl:overflow-y-auto xl:pr-0.5">
+          {/* The v2 attribution story leads the column: the confidence trail
+              and the sealed audit chain are what distinguish v2 from v1.
+              Each is shrink-0 so the column scrolls rather than squashing. */}
+          <div className="shrink-0 min-h-[460px]">
+            <EvidenceTrail />
+          </div>
+          <div className="shrink-0 min-h-[420px]">
+            <AuditLedger />
+          </div>
           <div data-tour="analytics" className="shrink-0">
             <ThreatAnalytics />
           </div>

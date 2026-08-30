@@ -531,3 +531,37 @@ opened the dialog. Wired into `IntelDetailModal` and the notification drawer.
 `BreachToaster` now renders a visually-hidden `aria-live="assertive"` region alongside the toast.
 Sonner toasts are routinely missed by screen readers, and a geofence breach is the single most
 important event this product produces — announcing it is not an accessibility nicety, it is the feature.
+
+### DEC-042 — `offsetParent` is the wrong visibility test; the focus trap was a no-op.
+`focusableWithin()` filtered candidates on `offsetParent !== null`. That property is **null for any
+`position: fixed` element**, and every dialog in this app is fixed — the notification drawer is
+`fixed right-0`, the intercept modal is `fixed inset-0`.
+
+So the trap found zero focusable elements and **did nothing on precisely the elements it existed to
+trap**. The nine unit tests passed throughout, because happy-dom reports `offsetParent` differently
+from a real browser.
+
+Caught by the Playwright journey. Now uses `getClientRects()`, which is layout-based and correct for
+fixed positioning, with an explicit fallback for headless DOM implementations that have no layout.
+
+### DEC-043 — Touch targets gate on `pointer: coarse`, not viewport width.
+The playbook asks for 44px targets below 768px. Width is a proxy that is wrong in both directions: a
+narrow browser window on a desktop is still mouse-driven and does not need them, and a large tablet
+does. `@media (pointer: coarse)` asks the actual question.
+
+Applied by growing the hit area rather than the visual box, so the control room's instrument density
+survives untouched on desktop. The journey asserts it in a context with `hasTouch: true`, so the test
+matches the rule rather than asserting a rule that deliberately does not apply.
+
+### DEC-044 — Phase 9 scope: cut MapLibre, 3D graph and the Sankey; kept what carries the claims.
+The playbook allows cutting inside a phase and recording it. Built: the **Evidence Trail** (the
+0.84-vs-0.999 argument, with the LR arithmetic shown rather than asserted) and the **Audit Ledger**
+(hash chain, seal, verify, LOCAL CHAIN badge) — the two panels that carry the USPs — plus both pieces
+of carried debt and the accessibility work.
+
+Deferred as **roadmap, not done**: MapLibre GL replacing Leaflet, react-force-graph-3d, the d3 Sankey
+rendering, and the timeline scrubber. Leaflet already works and the tilt is presentation, not
+capability; the three-column responsive contract, zero horizontal overflow and the reduced-motion
+behaviour are all verified at 1440 / 1024 / 390.
+
+On stage these are described as roadmap. Never as done.
