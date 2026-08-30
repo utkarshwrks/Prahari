@@ -413,3 +413,17 @@ def test_seal_response_shape_is_consistent_across_paths():
         assert key in empty, f"empty-ledger seal response is missing {key}"
     assert empty["chain_label"] == "NOT SEALED"
     assert empty["explorer_url"] is None
+
+
+def test_amoy_is_a_public_chain_with_an_explorer():
+    """Spec 5: Polygon Amoy is the primary anchor chain (survives past 2026)."""
+    from engine.audit.anchor import chain_label, explorer_url, LOCAL_CHAIN_IDS
+    assert 80002 not in LOCAL_CHAIN_IDS
+    assert chain_label(80002) == "POLYGON AMOY"
+    url = explorer_url(80002, "0x" + "ab" * 32)
+    assert url and "amoy.polygonscan.com" in url
+
+
+def test_amoy_default_chain_id():
+    from engine.settings import Settings
+    assert Settings(_env_file=None).chain_id == 80002

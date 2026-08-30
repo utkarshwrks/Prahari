@@ -44,8 +44,12 @@ class Settings(BaseSettings):
     shodan_api_key: str | None = None
 
     # ---- chain (Phase 8) -------------------------------------------------
-    rpc_url: str = "https://ethereum-sepolia-rpc.publicnode.com"
-    chain_id: int = 11155111  # Sepolia
+    # Polygon Amoy by default: free faucet, survives past the hackathon, and the
+    # single backend anchorer wallet makes every seal zero-gas for the user.
+    # Swap to Sepolia or a funded mainnet with a .env change; the provider reads
+    # the chain id from the node it connects to, so the badge is always honest.
+    rpc_url: str = "https://rpc-amoy.polygon.technology"
+    chain_id: int = 80002  # Polygon Amoy
     contract_addr: str | None = None
     anchorer_key: str | None = None
 

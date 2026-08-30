@@ -21,8 +21,14 @@ from ..settings import get_settings
 log = logging.getLogger(__name__)
 
 # Public chains that may carry an explorer link.
+# Public chains that carry an explorer link. Polygon Amoy is PRIMARY: unlike
+# Sepolia (which retires in Sep 2026) it lives well past the hackathon, its
+# faucet POL is free, and the anchorer pattern makes it zero-gas for every
+# analyst and judge. Sepolia stays for the "Ethereum" story while it lives.
 EXPLORERS = {
-    11155111: "https://sepolia.etherscan.io",
+    80002: "https://amoy.polygonscan.com",   # Polygon Amoy testnet (primary)
+    11155111: "https://sepolia.etherscan.io",  # Ethereum Sepolia (secondary)
+    137: "https://polygonscan.com",
     1: "https://etherscan.io",
 }
 
@@ -52,6 +58,10 @@ def chain_label(chain_id: int | None) -> str:
         return "UNAVAILABLE"
     if chain_id in LOCAL_CHAIN_IDS:
         return "LOCAL CHAIN"
+    if chain_id == 80002:
+        return "POLYGON AMOY"
+    if chain_id == 137:
+        return "POLYGON"
     if chain_id == 11155111:
         return "SEPOLIA"
     if chain_id == 1:
