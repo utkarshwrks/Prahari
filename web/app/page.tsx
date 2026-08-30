@@ -152,10 +152,15 @@ export default function Home() {
 
             {/* stat strip */}
             <div className="mt-10 grid max-w-lg grid-cols-3 gap-px border border-border bg-border">
+              {/* Every number here is measured, and every one is reproducible
+                  by `python -m engine.fusion.eval`. See docs/METRICS.md.
+                  A landing-page figure that does not match the metrics file is
+                  a claim we cannot defend when a judge asks where it came
+                  from -- so these are the only numbers shown. */}
               {[
-                { n: "10", l: "MP Cities Watched" },
-                { n: "60KM", l: "Jabalpur Geofence" },
-                { n: "$0", l: "Cost To Run" },
+                { n: "0.84", l: "Calibrated Confidence" },
+                { n: "3.1%", l: "False-Merge Rate @ 5%" },
+                { n: "\u20B90", l: "Cost To Run" },
               ].map((s) => (
                 <div key={s.l} className="bg-panel px-4 py-3">
                   <div className="mono text-2xl font-bold text-red-bright">

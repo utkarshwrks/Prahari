@@ -43,3 +43,6 @@ npm-debug.log*
 # scratch
 __shot.mjs
 __*.mjs
+
+# demo launcher logs
+.demo-logs/

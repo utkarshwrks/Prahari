@@ -77,35 +77,92 @@ not started · **roadmap** = descoped, never demoed as working.
 | FR-25 | Repository audit with verified invariants | 1 | **done** |
 | FR-26 | Regression tests on the geofence and extractor | 1 | **done** |
 | FR-27 | No emoji or decorative glyphs in rendered UI | 1 | **done** |
-| FR-28 | Monorepo layout (`web/` + `engine/` + `anchor/`) | 2 | planned |
-| FR-29 | Containerised Neo4j (GDS) + PostgreSQL (pgvector) | 2 | planned |
-| FR-30 | FastAPI engine, all keys optional, honest degradation | 2 | planned |
-| FR-31 | Three-way mode: DEMO · DATASET · LIVE | 2 | planned |
-| FR-32 | Server-side engine proxy — no engine URL in the browser | 2 | planned |
-| FR-33 | Autonomous scheduler + `/sources` freshness reporting | 2 | planned |
-| FR-34 | Public dataset loaders (Gwern DNM, Kaggle Agora) | 3 | planned |
-| FR-35 | Ground-truth testbed with four labelled cases, fixed seed | 3 | planned |
-| FR-36 | Deep extraction: PGP, onion v3, XMR, spaCy + MuRIL Hinglish NER | 3 | planned |
-| FR-37 | Identity graph in Neo4j with typed, weighted relationships | 4 | planned |
-| FR-38 | Splink probabilistic record linkage with trained m/u weights | 4 | planned |
-| FR-39 | GDS actor resolution: WCC, Louvain, FastRP embeddings | 4 | planned |
-| FR-40 | Stylometry with Hinglish markers + LaBSE embeddings | 5 | planned |
-| FR-41 | Behavioural profiling and rebrand change-point detection | 5 | planned |
-| FR-42 | Counter-deception: mimicry and LLM-rewrite detection | 5 | planned |
-| FR-43 | Passive onion → clearnet infrastructure pivoting (crt.sh, JARM) | 6 | planned |
-| FR-44 | Evidence fusion: root-cause collapse, reliability dampening, caps | 7 | planned |
-| FR-45 | Isotonic calibration + split-conformal false-merge guarantee | 7 | planned |
-| FR-46 | Immutable audit ledger: keccak hash chain + Ed25519 signatures | 8 | planned |
-| FR-47 | Per-case Merkle root + single-record inclusion proofs | 8 | planned |
-| FR-48 | Sepolia anchoring with visible LOCAL CHAIN Anvil fallback | 8 | planned |
-| FR-49 | CSV / JSON / PDF export carrying root, tx hash and chain id | 8 | planned |
-| FR-50 | 3D actor graph with timeline scrubber | 9 | planned |
-| FR-51 | Evidence trail Sankey with visible LR maths | 9 | planned |
-| FR-52 | MapLibre tilted map with extruded heat and actor footprint | 9 | planned |
-| FR-53 | Accessibility: focus trap, aria-live, `prefers-reduced-motion` | 9 | planned |
-| FR-54 | Responsive contract at 1440 / 1024 / 390 px | 9 | planned |
-| FR-55 | Production security: secret enforcement, rate limits, RBAC | 10 | planned |
-| FR-56 | Reproducible metrics pipeline | 10 | planned |
+| FR-28 | Monorepo layout (`web/` + `engine/` + `anchor/`) | 2 | **done** |
+| FR-29 | Containerised Neo4j (GDS) + PostgreSQL (pgvector) | 2 | **done** |
+| FR-30 | FastAPI engine, all keys optional, honest degradation | 2 | **done** |
+| FR-31 | Three-way mode: DEMO · DATASET · LIVE | 2 | **done** |
+| FR-32 | Server-side engine proxy — no engine URL in the browser | 2 | **done** |
+| FR-33 | Autonomous scheduler + `/sources` freshness reporting | 2 | **done** |
+| FR-34 | Public dataset loaders (Gwern DNM, Kaggle Agora) | 3 | **done** |
+| FR-35 | Ground-truth testbed with four labelled cases, fixed seed | 3 | **done** |
+| FR-36 | Deep extraction: PGP, onion v3, XMR, spaCy + MuRIL Hinglish NER | 3 | **done** |
+| FR-37 | Identity graph in Neo4j with typed, weighted relationships | 4 | **done** |
+| FR-38 | Splink probabilistic record linkage with trained m/u weights | 4 | **done** |
+| FR-39 | GDS actor resolution: WCC, Louvain, FastRP embeddings | 4 | **done** |
+| FR-40 | Stylometry with Hinglish markers + LaBSE embeddings | 5 | **done** |
+| FR-41 | Behavioural profiling and rebrand change-point detection | 5 | **done** |
+| FR-42 | Counter-deception: mimicry and LLM-rewrite detection | 5 | **done** |
+| FR-43 | Passive onion → clearnet infrastructure pivoting (crt.sh, JARM) | 6 | **done** |
+| FR-44 | Evidence fusion: root-cause collapse, reliability dampening, caps | 7 | **done** |
+| FR-45 | Isotonic calibration + split-conformal false-merge guarantee | 7 | **done** |
+| FR-46 | Immutable audit ledger: keccak hash chain + Ed25519 signatures | 8 | **done** |
+| FR-47 | Per-case Merkle root + single-record inclusion proofs | 8 | **done** |
+| FR-48 | Sepolia anchoring with visible LOCAL CHAIN Anvil fallback | 8 | **done** |
+| FR-49 | CSV / JSON / PDF export carrying root, tx hash and chain id | 8 | **done** |
+| FR-50 | 3D actor graph with timeline scrubber | 9 | roadmap |
+| FR-51 | Evidence trail Sankey with visible LR maths | 9 | **done** (table + bars; d3 Sankey roadmap) |
+| FR-52 | MapLibre tilted map with extruded heat and actor footprint | 9 | roadmap |
+| FR-53 | Accessibility: focus trap, aria-live, `prefers-reduced-motion` | 9 | **done** |
+| FR-54 | Responsive contract at 1440 / 1024 / 390 px | 9 | **done** |
+| FR-55 | Production security: secret enforcement, rate limits, RBAC | 10 | **done** |
+| FR-56 | Reproducible metrics pipeline | 10 | **done** |
+
+**Roadmap rows are roadmap, not done.** FR-50 (3D force graph) and FR-52 (MapLibre tilted map) were
+cut in DEC-044; the Siamese authorship model was cut in DEC-023. Leaflet works and the tilt is
+presentation rather than capability. These are described as roadmap on stage, never as shipped.
+
+## Setup in five commands
+
+```bash
+git clone <repo> && cd Prahari
+npm install                                   # web workspace
+(cd engine && uv venv --python 3.12 && uv pip install -e ".[dev]")
+docker compose up -d                          # neo4j + postgres
+npm run demo                                  # everything, in order, ~10s
+```
+
+Then open http://localhost:3000 and log in as `officer@mp.gov.in` / `prahari123`.
+The demo account is **disabled in production** and the app **refuses to boot** in production without
+`NEXTAUTH_SECRET`.
+
+| Command | What it does |
+|---|---|
+| `npm run demo` | starts datastores, local chain, contract, engine and web, then waits until each answers |
+| `npm run test:all` | web + engine + Solidity suites |
+| `npm run e2e` | the 25-assertion browser journey |
+| `python -m engine.fusion.eval` | regenerates every metric in `docs/METRICS.md` |
+
+## Measured results
+
+| Metric | Value |
+|---|---|
+| Calibrated confidence, worked example | **0.84** against a naive **0.999** |
+| False-merge rate at α = 0.05 | **3.1%**, guarantee holds |
+| Precision / F1 at τ | **1.000 / 0.938** |
+| Brier / ECE | **0.0053 / 0.0051** |
+| Splink precision / recall | **1.000 / 0.818** (130/130 reachable) |
+| False merges over 3,180 unrelated pairs | **0** |
+| Agora listings ingested | **109,689** across 3,192 vendors |
+| `anchor()` gas | **95,232** |
+| Cold start | **10 s** |
+| Tests | 236 engine · 95 web · 12 Solidity · 25 e2e |
+
+## Every external service, and whether it needs a key
+
+| Need | Service | Key |
+|---|---|---|
+| Certificate transparency | certspotter (primary), crt.sh (failover) | **none** |
+| Host fingerprints | Shodan **InternetDB** | **none** |
+| BTC data | mempool.space | **none** |
+| Map tiles | CartoDB / OpenStreetMap | **none** |
+| OSINT | HN Algolia, Google News RSS, Reddit | **none** |
+| Datasets | Kaggle Agora, Gwern DNM archives | free account, manual |
+| Chain | Ethereum Sepolia via publicnode, or local Anvil | **none** |
+| LLM extraction *(optional)* | Groq free tier | free key |
+| ETH history *(optional)* | Etherscan free tier | free key |
+
+**Zero keys are required to run the full demo.** The two optional keys enrich features that degrade
+honestly without them.
 
 Status is authoritative in [`PROGRESS.md`](PROGRESS.md). Design decisions and their reasons are in
 [`docs/DECISIONS.md`](docs/DECISIONS.md); the v1 audit is in [`docs/AUDIT_V1.md`](docs/AUDIT_V1.md).

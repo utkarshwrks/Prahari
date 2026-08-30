@@ -565,3 +565,55 @@ capability; the three-column responsive contract, zero horizontal overflow and t
 behaviour are all verified at 1440 / 1024 / 390.
 
 On stage these are described as roadmap. Never as done.
+
+---
+
+## Phase 10 — Release
+
+### DEC-045 — Production refuses to boot without a real `NEXTAUTH_SECRET`.
+v1 fell back to a hardcoded signing secret so `npm run dev` worked with zero configuration. Correct for
+a demo, indefensible for a deployment: a known secret means **anyone can forge a session token for any
+account**, including an officer's, and nothing in the audit trail would look wrong.
+
+The fallback now exists only outside production. In production, a missing secret **throws at import
+time**, and setting it to the committed dev default is refused separately — that is the subtler
+mistake, because it looks configured. Both guards verified to actually fire, not merely documented.
+
+The demo officer account is gated the same way: its credentials are printed on the login page and
+committed to this repository, so in production it simply does not exist.
+
+### DEC-046 — Rate limits are keyed to what is worth protecting.
+`/api/signup` is limited per IP (5 / 15 min): it is an account-enumeration and spam surface.
+
+Credential login is limited **per account email**, not per IP (10 / 15 min). A password spray from a
+botnet against one officer's account defeats IP limiting entirely, and the account is the thing worth
+protecting. A throttled attempt returns the same `null` as a wrong password, because distinguishing the
+two tells an attacker which accounts exist.
+
+Stated limitation: the counter is in-process. Behind multiple instances each keeps its own window, so
+the effective limit multiplies by instance count. For a single-node district deployment that is
+correct; a horizontally scaled one needs a shared store, and the playbook forbids Redis.
+
+### DEC-047 — Landing-page numbers come from `METRICS.md` or they do not appear.
+The hero stat strip advertised "10 MP Cities / 60KM Geofence / $0" — true, but v1 facts on a v2 page.
+It now shows **0.84 calibrated confidence**, **3.1% false-merge rate at α=0.05**, and **₹0**.
+
+Every figure on the landing page is reproducible with `python -m engine.fusion.eval`. A number a judge
+cannot trace to the metrics file is a number we cannot defend when asked where it came from.
+
+### DEC-048 — `npm run demo` waits for readiness, not for processes.
+The launcher starts datastores, a local chain, the contract, the engine and the web app in dependency
+order, and polls each until it actually answers. "Started" is not "ready": opening the demo on a
+half-booted engine looks exactly like a broken product.
+
+**Measured cold start: 10 seconds** against a three-minute budget. It degrades honestly — no Foundry
+means sealing is disabled and it says so, rather than failing opaquely at step five of the demo.
+
+### DEC-049 — The deck checklist lists what to REMOVE, not only what to add.
+`docs/DECK.md` carries the cleared numbers, but the section that matters is the claims to delete:
+"de-anonymises Tor" (we do not and say so), any metric attributed to Agora (**every metric comes from
+the labelled testbed** — Agora has no timestamps, ~0.1% PGP and zero MP geography), and the cut
+features described as roadmap rather than done.
+
+A slide claiming something the running system cannot do is the fastest way to lose the room, because
+the demo is right there.

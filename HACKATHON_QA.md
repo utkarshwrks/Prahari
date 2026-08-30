@@ -565,3 +565,98 @@ Every answer is short, honest, and confident. The golden rule: **"We geofence wh
 
 *Say the golden rule if cornered: "Content-based geospatial intelligence — not network
 deanonymization."*
+
+---
+
+# PRAHARI v2 — the ten viva questions
+
+Short answers an officer or a judge will actually ask. Every number is in
+`docs/METRICS.md` and reproducible with `python -m engine.fusion.eval`.
+
+### 1. Do you de-anonymise Tor?
+
+No, and neither does anything else that is honest about it. We correlate footprints operators leaked
+themselves into **public** indexes: certificate transparency logs, published scan data, academically
+released marketplace archives, blockchain explorers. A network-layer test asserts that no code path can
+even resolve a `.onion` hostname.
+
+Breaking Tor would be a different project, and an illegal one.
+
+### 2. Why is your confidence 0.84 and not 99%?
+
+Because 99% would be false. Stack our five signals assuming independence and you get **0.999**. That
+number is wrong: the wallet and the infrastructure often share one cause, and writing style is
+imitable. We convert each signal to a likelihood ratio, **collapse signals by root cause** so one fact
+cannot be counted five times, and dampen each by how reliable that class of evidence actually is. That
+gives **0.84**.
+
+0.84 survives cross-examination. 0.999 gets the whole case thrown out.
+
+### 3. How do you know 0.84 means 84%?
+
+Isotonic calibration on a held-out split, reported with **Brier 0.0053** and **ECE 0.0051**. ECE is
+literally the average gap between what we claim and what happens.
+
+### 4. What happens when you are wrong?
+
+We publish the rate. Split-conformal prediction gives a threshold τ for a chosen risk budget α such
+that the false-merge rate among accepted links is bounded by α. At **α = 0.05 we measure 3.1%**. It is
+a distribution-free finite-sample guarantee, not a hope.
+
+Ask any other team what their false-positive rate is.
+
+### 5. Someone copies a vendor's bio to frame them. What happens?
+
+That is a case in our testbed, and it is the one we care most about. The decoy shares an identical bio,
+matching writing style and an overlapping active window with its target. Raw style similarity is
+**0.83** — it genuinely reads like the same person.
+
+It scores **0.0008**. The copied bio triggers `mimicry_suspected`, which caps the linguistic evidence at
+0.2, because a copied bio *explains* the similarity without any shared author. Different PGP key,
+different wallet: the hard evidence says two people, and the hard evidence wins.
+
+### 6. Can an insider alter the evidence?
+
+Not undetectably. Every analyst action is canonically serialised, keccak-256 hashed, chained to the
+previous record and signed with the analyst's Ed25519 key. The case's Merkle root is anchored on chain.
+
+We tested an attacker with **full database write access**: modify a record, delete a middle record,
+delete-and-relink-and-renumber, re-sign with another key, reorder, replay another case's seal. **All six
+detected**, and verification names the failing record index rather than saying "invalid".
+
+### 7. What goes on the blockchain?
+
+Two 32-byte hashes and a count. Nothing else — no handle, no wallet, no name, no listing text. Even the
+case reference is hashed, because a public chain is permanent and world-readable and a case number is
+still investigative metadata.
+
+### 8. What if the network is down during the demo?
+
+It seals to a local chain and says so. The badge reads **LOCAL CHAIN** and no explorer link is rendered,
+because the label is derived from the chain id we actually connected to, not from configuration. A
+Sepolia link on a local transaction would be a fabricated evidence trail — worse than having no
+fallback at all.
+
+### 9. Why free and open source? Is that not a limitation?
+
+It is the deployment model. A district cyber cell handling investigative data cannot send it to a
+third-party SaaS, and cannot depend on a vendor's renewal cycle. Everything here runs on-premise on one
+machine: Neo4j Community, PostgreSQL, scikit-learn, a local chain if needed. **Zero API keys are
+required** — Shodan's InternetDB and certificate transparency both work unauthenticated.
+
+Total running cost is ₹0, and the procurement conversation is "install it", not "sign here".
+
+### 10. What does it not do?
+
+- **No temporal analysis on real data.** Agora is a snapshot with no timestamps, so behavioural
+  profiling runs on labelled synthetic ground truth. Gwern's archives would supply real timestamps and
+  are roadmap.
+- **Every metric comes from the testbed**, not from Agora. Agora supplies real vendor prose for
+  stylometry and real identifiers; it has zero Madhya Pradesh geography, so it can never demonstrate
+  the geofence.
+- **Stylometry is our weakest signal** and is weighted at half a PGP key's reliability, on purpose.
+- **Splink recall is 0.818**, not higher, because only 130 of 159 true pairs share any hard identifier.
+  It finds 130 of 130. The rest are what stylometry and fusion exist for.
+- **3D map, force graph and Sankey are roadmap**, not built.
+
+We would rather answer this question than be asked it.

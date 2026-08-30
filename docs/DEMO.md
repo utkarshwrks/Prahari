@@ -3,16 +3,25 @@
 Target: **under 3 minutes**, no manual steps, from `npm run demo` on a fresh clone.
 Rehearsed three times by three different people before the finale (Phase 10 obj 3).
 
-Timings below are budgets, filled with real measurements during Phase 10.
+Timings below are budgets. Measured values from Phase 10 are in **bold** where the step has been
+timed end to end.
 
 ---
 
 ## Before you start
 
 ```bash
-docker compose up -d          # neo4j + postgres, healthy in ~60s
-npm run demo                  # starts engine + web, seeds the testbed case
+npm run demo
 ```
+
+That is the whole setup. It brings up the datastores, starts a local chain,
+deploys the anchor contract, boots the engine and the web app, and waits until
+each one actually answers before printing "ready".
+
+**Measured cold start: 10 seconds.** The playbook budget is three minutes.
+
+If Docker is not running it will say so. If Foundry is absent, sealing is
+disabled and everything else still runs — the launcher tells you which.
 
 Open `http://localhost:3000`. Log in as `officer@mp.gov.in` / `prahari123`.
 
