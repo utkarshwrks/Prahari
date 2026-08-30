@@ -1,17 +1,44 @@
-/node_modules
-/.next
-/out
-/build
+# dependencies
+node_modules/
+
+# next.js
+.next/
+out/
+build/
+next-env.d.ts
+*.tsbuildinfo
+
+# env — real secrets never leave the machine
 .env
 .env.local
 .env*.local
-*.tsbuildinfo
-next-env.d.ts
+
+# runtime data
+web/data/users.json
+
+# python / engine
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+engine/models/
+engine/.env
+
+# foundry / anchor
+anchor/out/
+anchor/cache/
+anchor/broadcast/
+
+# docker volumes are named, but keep any local dumps out
+*.dump
+
+# os / editor
 .DS_Store
 npm-debug.log*
-/data/users.json
+.claude/settings.local.json
+
+# scratch
 __shot.mjs
 __*.mjs
-
-# local tooling
-.claude/settings.local.json
