@@ -54,9 +54,10 @@ def test_anchoring_needs_both_contract_and_key():
     assert both.capabilities()["anchoring"]["enabled"] is True
 
 
-def test_sepolia_is_the_default_chain():
-    """DEC-004: Sepolia is locked as the public chain."""
-    assert Settings(_env_file=None).chain_id == 11155111
+def test_polygon_amoy_is_the_default_chain():
+    """Spec 5: Amoy is the primary anchor chain -- it survives past Sep 2026
+    when Sepolia retires, and the anchorer pattern makes it zero-gas."""
+    assert Settings(_env_file=None).chain_id == 80002
 
 
 def test_groq_model_default_is_not_the_retired_llama():
