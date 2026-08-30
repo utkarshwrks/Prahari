@@ -396,3 +396,20 @@ def test_post_seal_records_are_flagged_not_hidden(monkeypatch):
     assert b["sealed_root_matches_current"] is False
     assert b["records_added_after_seal"] == 1
     assert "appended after this case was sealed" in b["integrity_note"]
+
+
+def test_seal_response_shape_is_consistent_across_paths():
+    """A UI reads chain_label to render the LOCAL CHAIN badge. An early return
+    with fewer keys makes it undefined, which renders as an empty badge --
+    indistinguishable from 'sealed to an unknown chain'."""
+    from engine.audit import cases as CS
+    from engine.routers import audit as R
+
+    CS._LEDGERS.pop("CASE-EMPTY-T", None)
+    empty = R.seal("CASE-EMPTY-T")
+    assert empty["ok"] is False
+    for key in ("case_id", "chain_label", "chain_id", "tx_hash",
+                "is_public_chain", "explorer_url", "detail"):
+        assert key in empty, f"empty-ledger seal response is missing {key}"
+    assert empty["chain_label"] == "NOT SEALED"
+    assert empty["explorer_url"] is None

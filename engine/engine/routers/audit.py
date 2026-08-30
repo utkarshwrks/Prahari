@@ -69,7 +69,16 @@ def seal(case_id: str) -> dict:
     """
     lg = ledger(case_id)
     if not lg.records:
-        return {"ok": False, "detail": "Nothing to seal: the ledger is empty."}
+        # Same response SHAPE as the success path. An early return with fewer
+        # keys makes a UI read chain_label as undefined and render an empty
+        # badge, which is indistinguishable from "sealed to an unknown chain".
+        return {
+            "ok": False, "case_id": case_id, "merkle_root": None, "leaf_count": 0,
+            "chain_label": "NOT SEALED", "chain_id": None, "tx_hash": None,
+            "block": None, "gas_used": None, "is_public_chain": False,
+            "explorer_url": None,
+            "detail": "Nothing to seal: the ledger is empty.",
+        }
 
     priv, pub = keys_for(DEMO_ANALYST)
     lg.append(DEMO_ANALYST, "seal",
