@@ -317,3 +317,56 @@ narrow. That is expected and correct: the testbed generates from a small templat
 personas read somewhat alike, and stylometry is the weakest evidence in the system by design. It
 carries reliability 0.5 in fusion, half a PGP key's. The number to trust here is not the separation
 but the **direction of the two cases**: decoy 0.200 against rebrand 0.843.
+
+---
+
+## Phase 6 — INFRASTRUCTURE FINGERPRINTING — 31 August 2026
+
+### Automated
+
+| Command | Result | Count |
+|---|---|---|
+| `uv run pytest` | **PASS** | **165 passed** (139 → 165) |
+| `npm test` | **PASS** | 57 passed |
+| `npm run build` | **PASS** | clean |
+| Infra tests | **PASS** | 26, of which 7 are passivity assertions |
+
+### Manual (author-run)
+
+- [x] `/infra/pivot` on the testbed onion resolves to the planted domain with the cert-reuse evidence
+      line, strength **0.95**
+- [x] **Live CT lookup on a real public domain** (`iitb.ac.in`) returns **100 certificates** in the
+      workbench — the adapter is real, not a fixture
+- [x] Shodan works with **no key at all**; ports, hostnames and CPEs returned (B-03 closed)
+- [x] Repeating a pivot serves from cache — hit rate **0.50** after two calls
+- [x] `/infra/certificates?domain=…onion` is **refused outright**, not attempted
+- [x] Confirmed from the code path and a socket spy that **no request ever went to a `.onion` host`**
+
+### Claude
+
+**Not run.** D3.1 with N = 6, plus the outbound-URL review.
+
+### Verdict
+
+**PASS on every acceptance criterion.**
+
+### Passivity — how it is enforced, not asserted
+
+Seven tests, because this claim is the project's legal basis rather than a feature:
+
+1. `assert_not_onion()` rejects `.onion` in every casing, with credentials, ports and paths
+2. public indexes are allowed (over-blocking would also be a bug)
+3. `onion.example.com` — a clearnet host — is correctly **not** blocked
+4. static sweep: no `.onion` URL literal exists in the engine source
+5. **network-layer**: `socket.getaddrinfo` is monkeypatched during a full pivot; **zero `.onion`
+   resolutions attempted**
+6. JARM refuses any host not explicitly owned (DEC-028)
+7. `match()` can never return a `.onion` as a clearnet result, even if one is fed in as a candidate
+
+### Findings
+
+| ID | Severity | Finding |
+|---|---|---|
+| **DEC-026** | — | **B-03 closed, better than assumed.** Shodan needs no key: `internetdb.shodan.io` is free and unauthenticated. `SHODAN_API_KEY` removed from the critical path — one fewer key for an on-prem deployment. |
+| **DEC-027** | Major | **crt.sh was DOWN: 0 of 5 attempts, all HTTP 502.** It carries the two strongest infra rules. Had the demo been built on it alone, the strongest evidence path would fail whenever crt.sh has a bad day. certspotter (free, keyless) is now primary with crt.sh as failover, and the response names which source answered. |
+| **DEC-028** | — | JARM actively probes TLS, so it runs only against hosts we control. The testbed leak resolves from planted metadata, keeping live probes off the demo's critical path entirely. |

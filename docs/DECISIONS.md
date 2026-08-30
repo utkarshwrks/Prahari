@@ -335,3 +335,40 @@ k=3 for short texts so Jaccard does not collapse to all-or-nothing on exactly th
 Result: decoy **s_style 0.2000** (capped), flagged `mimicry_suspected`, against rebrand **0.8432**.
 Its raw character-n-gram similarity is still 0.827 — the decoy genuinely does read like its target,
 which is the point. The cap is the system recognising imitation rather than being fooled by it.
+
+---
+
+## Phase 6 — Infrastructure Fingerprinting
+
+### DEC-026 — B-03 resolved: Shodan needs no key at all. InternetDB is free and unauthenticated.
+The blocker was that Shodan free accounts may not include host-lookup API credits. Measured: they do
+not need to. **`https://internetdb.shodan.io/{ip}` is free, requires no key, and returns ports,
+hostnames, CPEs, tags and known vulns** — everything the infra engine needs for host fingerprinting.
+
+`SHODAN_API_KEY` is therefore removed from the critical path entirely. It stays an optional enrichment
+for the paid `/shodan/host` endpoint, and its absence costs nothing. This is strictly better than the
+playbook assumed: one fewer key, and one fewer account for an on-prem deployment to register.
+
+### DEC-027 — Certificate Transparency uses certspotter first, crt.sh second.
+**crt.sh was down during Phase 6 — 0 of 5 requests succeeded, all HTTP 502.** It carries the two
+strongest infra rules (cert SHA-256 reuse 0.95, CN/SAN naming a clearnet domain 0.85), and it is a
+well-known flaky service. Building the demo on it alone means the strongest evidence path fails if
+crt.sh is having a bad day on 20 September.
+
+`api.certspotter.com` is also free, also keyless, was returning 100 certificates with
+`dns_names`, `issuer` and `cert_sha256` throughout, and is now the **primary** source. crt.sh remains
+as automatic failover, and `/infra/sources` reports which source actually answered.
+
+The engine badge names the CT source that served each result. A pivot that silently came from a
+different index than the analyst assumes is the same class of dishonesty as a wrong engine badge.
+
+### DEC-028 — JARM and live scanning are restricted to hosts we control.
+JARM actively probes a host's TLS stack. Run against a target it is a scan, which the passivity rule
+forbids outright. It therefore runs **only** against testbed-controlled hosts, and the testbed's
+infra-leak case is resolvable purely from planted metadata so the demo never needs a live probe.
+
+Certificate Transparency and Shodan InternetDB are genuinely passive: both are third-party indexes
+that already hold the data. We read an index; we never touch the target.
+
+**No code path may issue a request to a `.onion` host.** This is enforced by a network-layer test, not
+by convention.
