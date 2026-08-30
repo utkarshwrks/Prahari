@@ -4,79 +4,79 @@ The single source of truth for project status. Updated at the end of every phase
 
 ---
 
-## Last phase — 7: EVIDENCE FUSION — 31 August 2026 — automated layer PASS
+## Last phase — 8: IMMUTABLE AUDIT — 31 August 2026 — automated layer PASS
 
-**The USP.** All six roots fused into one calibrated, guaranteed, reproducible number.
+Court-grade chain of custody.
 
 **Shipped**
 
-- **`fusion/score.py`** — LR per signal, **root-cause collapse** (max per root), reliability
-  dampening, must-not-link caps, full reproducible trail.
-- **`fusion/calibrate.py`** — isotonic calibration, Brier, ECE with bin table, **split-conformal**
-  threshold with finite-sample correction.
-- **`fusion/eval.py`** — real signals from every prior engine; idempotent, fixed-seed.
-- **Endpoints** — `/fusion/model`, `/example`, `/pair/{id}`, `/threshold`, `/thresholds`, `/metrics`,
-  `POST /feedback`.
+- **`audit/ledger.py`** — canonical JSON, keccak-256 (Solidity-compatible), hash chain
+  `hash_n = keccak(prev ‖ leaf)`, Ed25519 signing and verification, closed action set.
+- **`audit/merkle.py`** — per-case tree with **odd-node promotion**, root, single-record inclusion
+  proofs.
+- **`anchor/PrahariAnchor.sol`** — Foundry project, solc 0.8.36, `onlyAnchorer`, double-anchor
+  revert, `Anchored` event. **`forge test` 12/12.**
+- **`audit/anchor.py`** — `EvmAnchorProvider` with Sepolia default and **visible** Anvil fallback.
+- **Endpoints** — ledger, record, seal, proof, verify, and `.json` / `.csv` / `.pdf` export.
 
-**Acceptance**
+**Verified end to end against a live Anvil chain**
 
-| Criterion | Required | Measured |
-|---|---|---|
-| Deck example | 0.84 ± 0.01 | **0.839543** |
-| Naive baseline | 0.999 ± 0.001 | **0.999126** |
-| Decoy | ≤ 0.30, negative listed | **0.000803**, `mimicry_suspected` |
-| False-merge rate | ≤ α | **0.0313 ≤ 0.05** |
-| Trail reproduces `p_raw` | exactly | **yes** |
-| Precision / F1 | — | **1.0000 / 0.9381** |
-| Brier / ECE | — | **0.0053 / 0.0051** |
+| Step | Result |
+|---|---|
+| Seal | ok, chain 31337, block 3, **gas 95,232** |
+| `explorer_url` on local chain | **None** — no fabricated Sepolia link |
+| Export → verify | **GREEN**, root matches |
+| Tamper one byte → verify | **RED at index 2**, "content was altered" |
+| Restore → verify | **GREEN** |
+| Single-record inclusion proof | verifies with 3 siblings; altered proof rejected |
 
-**Four bugs, each of which would have survived a demo and failed under scrutiny**
+**D3.3 threat model — attacker with full database write access, without the analyst key**
 
-1. **DEC-029 — the guarantee did not hold.** Isotonic outputs are piecewise constant; the conformal
-   quantile landed inside a tie block and admitted all of it. **Measured false-merge rate 25.2% while
-   the API reported a 5% guarantee.** A guarantee that does not hold is worse than none.
-2. **DEC-031 — the rebrand pair was unfindable by construction.** Deriving "candidate" from Splink
-   alone gave it the 1:10,000 prior and crushed it to **0.0003** — in the one case built to be findable
-   without a hard identifier. Now **0.2335** on lineage + style + timing.
-3. **DEC-030 — the trail did not reproduce.** Published at 6 dp, recomputation gave 0.925596 against a
-   `p_raw` of 0.925597. One digit, but the whole claim is reproducibility.
-4. **DEC-032 — two endpoints, two scales.** `/fusion/threshold` reported τ on raw scores while
-   `/fusion/pair` reported calibrated ones.
+| Attack | Outcome |
+|---|---|
+| Modify a record in place | detected at the index |
+| Delete a middle record | detected — `seq` gap is evidence |
+| Delete, relink `prev_hash` **and** renumber `seq` | **still detected** |
+| Re-sign with a different key | detected — key not registered to that analyst |
+| Reorder records | detected |
+| Replay another case's seal | reverts on chain (`AlreadyAnchored`) |
+| Show a Sepolia link for an Anvil tx | **impossible** — derived from the connected chain id |
 
-**Tests:** 201 engine (was 165), 57 web.
+**Tests:** 233 engine (was 201), 12 Solidity, 57 web.
 
 ---
 
-## Current phase — 8: IMMUTABLE AUDIT — not started
+## Current phase — 9: WORKBENCH UI — not started
 
-Hash chain, Ed25519 signatures, Merkle roots, Sepolia anchoring with Anvil fallback.
+PC-first, phone-safe, instrument-grade, no emojis.
 
 **Objectives**
 
-1. `audit/ledger.py` — canonical JSON, keccak-256, `hash_n = keccak(prev_hash ‖ leaf_n)`, Ed25519
-   signatures verified on read.
-2. `audit/merkle.py` — per-case tree, root, single-record inclusion proofs.
-3. `anchor/` — Foundry: `PrahariAnchor.sol`, `anchor(root, caseRef, leafCount)`, `onlyAnchorer`,
-   double-anchor revert.
-4. `audit/anchor.py` — `EvmAnchorProvider`, Sepolia default, **Anvil fallback with a visible LOCAL
-   CHAIN badge, never silent**.
-5. Endpoints `/audit/case/{id}/ledger`, `/seal`, `/audit/verify`.
-6. Export `.json` / `.csv` / `.pdf` embedding root, tx hash, chain id and per-record proofs.
-7. Tests: tamper detection at the failing index, signature verification, Merkle round-trip,
-   `forge test` (double anchor reverts, non-anchorer reverts), end-to-end seal→verify on Anvil.
+1. MapLibre GL replacing Leaflet: 60° pitch, extruded city-heat columns, animated geofence rings,
+   same `lastPulse.seq` siren contract, actor operating footprint.
+2. `panels/ActorGraph.tsx` — react-force-graph-3d over `/graph/actor/{id}`, Sigma 2D fallback below
+   768 px, timeline scrubber.
+3. `panels/EvidenceTrail.tsx` — d3 Sankey signals → roots → score, LR table, negatives as red flags,
+   reliability diagram, **conformal threshold slider** (must not imply finer resolution than
+   DEC-029 supports).
+4. `panels/AuditLedger.tsx` — live hash chain, Merkle tree, Seal button → tx card with **LOCAL CHAIN
+   badge**, Verify drop-zone → green/red with failing index.
+5. `panels/WalletFlow.tsx`, `IntelDetailModal` "find linked personas".
+6. `RecordsModal` CSV + PDF via the engine; **replace both `document.write` sites** (FINDING-02).
+7. Motion behind `prefers-reduced-motion`; focus trap, Escape, `aria-live`.
+8. Responsive: ≥1280 three columns, 768–1279 two, <768 stacked; touch targets ≥44 px; zero
+   horizontal overflow.
+9. Playwright journey: login → DATASET → actor → trail shows 0.84 → seal → verify green → tamper → red.
 
-**Blocker:** B-02 — Foundry is not installed. `curl -L https://foundry.paradigm.xyz | bash && foundryup`
-
-**Handed over from Phase 7:** `PairScore` canonical serialisation, and the analyst actions that must be
-hashed (confirm, reject, assign, note, seal, export).
+**Carried debt now due:** FINDING-02 (two `document.write` sites), FINDING-05 (no
+`prefers-reduced-motion` anywhere).
 
 ---
 
-## Next phase — 9: WORKBENCH UI
+## Next phase — 10: LANDING, DEMO HARDENING, DOCS, METRICS
 
-3D graph, tilted MapLibre map, evidence-trail Sankey, audit panel, exports, responsive.
-
-**Prerequisites from Phase 8:** all endpoint contracts the panels consume, with example payloads.
+**Prerequisites from Phase 9:** the list of copy strings on landing/about/docs that still describe
+v1-only behaviour.
 
 ---
 
@@ -85,7 +85,7 @@ hashed (confirm, reject, assign, note, seal, export).
 | # | Blocker | Blocks | Status |
 |---|---|---|---|
 | B-01 | Docker not installed | Phase 2 obj 2, 4 | **RESOLVED** 30 Aug — Docker 29.7.2, both images arm64-native, cold start 24 s |
-| B-02 | Foundry (`forge`, `anvil`) not installed | Phase 8 | Open — not yet needed, install before Phase 8 |
+| B-02 | Foundry not installed | Phase 8 | **RESOLVED** 31 Aug — Foundry 1.8.1, `forge test` 12/12, contract deployed and sealed on Anvil (DEC-033). |
 | B-03 | Shodan free tier credits | Phase 6 | **RESOLVED** 31 Aug — no key needed at all. `internetdb.shodan.io` is free and unauthenticated (DEC-026). |
 | B-04 | Gwern DNM Archives manual download | Phase 3 | **Kaggle Agora RESOLVED** 31 Aug — 109,689 rows loaded, 1,000-row real fixture committed. Gwern deferred per DEC-019; it is the only source with timestamps, so it stays a Phase 10 nice-to-have, not a demo dependency. |
 
