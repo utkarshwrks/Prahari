@@ -607,6 +607,26 @@ fixture — real marketplace text, not a dependency.)*
   seal/verify flow are real and exercised end to end, but **only on local Anvil**. Nothing has been
   anchored on Sepolia.
 
+### Second pass — judge simulation from a differently-named clone
+
+Re-run after the first two fixes, cloning into `SIH-Vasiliades-PRAHARI` and `PRAHARI-finale` rather
+than a folder called `prahari`. **Two more defects, both invisible on the development machine.**
+
+| ID | Severity | Finding |
+|---|---|---|
+| **DEC-053** | **Major** | **`npm run demo` hung for 142 s and left nothing listening.** Docker Compose derives its project name from the directory, so a clone into any other folder name looked for a different project, missed the running stack, and collided with the fixed container names. It failed *silently* — the worst failure at step one of a demo. |
+| **DEC-054** | **Major** | **The first click on the Audit panel timed out on a healthy engine.** A cold fusion/audit request triggers ~20 s of Splink training, past the proxy's 8 s ceiling, and rendered as "engine offline". The dev machine was always warm. A judge opening that panel first would have seen a broken product. |
+
+Verified after both fixes, on a fresh clone in a differently-named directory:
+
+| Check | Result |
+|---|---|
+| `npm run demo` | **17 s** |
+| First audit call, cold | **11.4 s**, 4 records, verify true |
+| Seven demo steps | **7/7** |
+| Browser journey | **25/25** |
+| Suites on that clone | 98 web · 236 engine · 12 Solidity, build clean |
+
 ### VERDICT
 
 **RELEASE GATE: CONDITIONAL PASS.**

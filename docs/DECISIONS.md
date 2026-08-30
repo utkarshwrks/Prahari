@@ -657,3 +657,31 @@ Three cannot be certified by the author:
 Marking those PASS would be exactly the failure this phase exists to catch, in the phase that exists to
 catch it. `v2.0-sih` is not tagged. The stop rule stands: anything not passing is described as roadmap,
 never demoed as working.
+
+
+### DEC-053 — The compose project name is pinned; the demo must not depend on the folder name.
+Docker Compose derives its project name from the **directory**. From a clone in any folder not named
+`prahari` it looked for project `p`, did not see the running stack, and tried to start a second one --
+which then collided with the fixed `container_name` values.
+
+`npm run demo` hung for **142 seconds** and left nothing listening. Any judge cloning into a directory
+with a different name would have hit exactly this, and the launcher failed *silently*, which is the
+worst possible failure at step one of a demo.
+
+`name: prahari` is now pinned in `docker-compose.yml`, the launcher checks the daemon by container name
+rather than the project-scoped `docker compose ps`, and both the compose-up and the health wait fail
+loudly with a reason.
+
+### DEC-054 — "Ready" must mean the first click is fast, not just that the port is bound.
+The first request touching fusion or the audit ledger triggers Splink training and profile building --
+about 20 seconds cold. That exceeded the proxy's 8-second timeout and rendered as **"engine offline" on
+a completely healthy engine**. The development machine never saw it, because it was always warm from
+earlier calls.
+
+A judge who opens the Audit panel first would have seen a broken product.
+
+The engine now warms `build_signals()` and the calibrator in a background thread at startup, and the
+proxy ceiling moves 8s → 45s as a backstop. Warming is an optimisation and never fatal: if it fails,
+the engine logs it and the first request is merely slow.
+
+Measured after the fix: first audit call **11.4 s** on a cold clone, 25/25 journey, 7/7 demo steps.
