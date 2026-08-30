@@ -26,6 +26,7 @@ const ALLOWED = [
   "style",
   "behaviour",
   "rebrand",
+  "compare",
   "infra",
   "fusion",
   "audit",
