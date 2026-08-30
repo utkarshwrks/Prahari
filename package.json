@@ -19,5 +19,8 @@
     "db:down": "docker compose down",
     "db:reset": "docker compose down -v && docker compose up -d",
     "migrate": "cd engine && uv run alembic upgrade head"
+  },
+  "devDependencies": {
+    "happy-dom": "^20.12.0"
   }
 }

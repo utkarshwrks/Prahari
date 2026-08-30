@@ -6,6 +6,10 @@ import path from "path";
 export default defineConfig({
   test: {
     environment: "node",
+    environmentMatchGlobs: [
+      ["__tests__/report.test.ts", "happy-dom"],
+      ["__tests__/a11y.test.ts", "happy-dom"],
+    ],
     include: ["__tests__/**/*.test.ts"],
   },
   resolve: {

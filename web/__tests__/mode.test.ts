@@ -151,7 +151,7 @@ describe("engine proxy allowlist", () => {
   it("covers every engine route prefix the workbench calls", async () => {
     const fs = await import("fs");
     const src = fs.readFileSync("app/api/engine/[...path]/route.ts", "utf8");
-    const listed = [...src.matchAll(/^\s*"([a-z]+)",$/gm)].map((m) => m[1]);
+    const listed = (src.match(/^\s*"[a-z]+",$/gm) ?? []).map((l) => l.trim().replace(/[",]/g, ""));
     for (const prefix of [
       "health", "version", "feed", "sources", "extract",
       "graph", "style", "behaviour", "rebrand", "compare",

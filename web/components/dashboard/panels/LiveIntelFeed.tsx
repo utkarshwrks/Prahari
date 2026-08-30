@@ -31,7 +31,13 @@ export default function LiveIntelFeed() {
 
   return (
     <>
-      <div className="slim-scroll h-full space-y-2 overflow-y-auto px-3 pb-3 pt-2">
+      <div
+        role="log"
+        aria-live="polite"
+        aria-relevant="additions"
+        aria-label="Live intercept feed"
+        className="slim-scroll h-full space-y-2 overflow-y-auto px-3 pb-3 pt-2"
+      >
         <AnimatePresence initial={false}>
           {intercepts.map((i) => (
             <IntelCard key={i.id} intercept={i} now={now} onClick={() => setSelected(i)} />

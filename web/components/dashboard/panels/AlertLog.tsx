@@ -1,7 +1,9 @@
 "use client";
 
 import { Download, FileText, Bell } from "lucide-react";
-import { useIntel } from "@/store/intel";
+import { useIntel, type AlertLogEntry } from "@/store/intel";
+import { toast } from "sonner";
+import { openReport } from "@/lib/report";
 import { clockString } from "@/lib/time";
 import TacticalPanel from "../../ui/TacticalPanel";
 
@@ -40,28 +42,20 @@ export default function AlertLog() {
   }
 
   function printReport() {
-    const rows = alertLog
-      .map(
-        (a) =>
-          `<tr><td>${clockString(new Date(a.timestamp))}</td><td>${a.city}</td><td>${a.source}</td><td>${a.severity.toUpperCase()}</td></tr>`
-      )
-      .join("");
-    const html = `<!doctype html><html><head><title>PRAHARI Alert Report</title>
-      <style>body{font-family:monospace;background:#0A0A0B;color:#F4F4F5;padding:32px}
-      h1{color:#FF2A1F;letter-spacing:.1em}table{width:100%;border-collapse:collapse;margin-top:16px}
-      th,td{border:1px solid #2A2A2E;padding:8px 12px;text-align:left;font-size:13px}
-      th{color:#A1A1AA;text-transform:uppercase;letter-spacing:.1em}
-      .meta{color:#A1A1AA;font-size:12px}</style></head>
-      <body><h1>PRAHARI · GEOFENCE ALERT REPORT</h1>
-      <div class="meta">MP Cyber Cell · Jabalpur Jurisdiction<br/>Generated ${new Date().toLocaleString()} · ${alertLog.length} alerts · SYNTHETIC DATA</div>
-      <table><thead><tr><th>Time</th><th>City</th><th>Source</th><th>Severity</th></tr></thead>
-      <tbody>${rows || '<tr><td colspan="4">No alerts</td></tr>'}</tbody></table>
-      <script>window.onload=()=>window.print()</script></body></html>`;
-    const w = window.open("", "_blank");
-    if (w) {
-      w.document.write(html);
-      w.document.close();
-    }
+    // FINDING-02, second site. The playbook only named RecordsModal.
+    const ok = openReport({
+      title: "PRAHARI - Geofence Alert Report",
+      subtitle: "MP Cyber Cell . Jabalpur Jurisdiction . SYNTHETIC DATA",
+      columns: [
+        { header: "Time", value: (a: AlertLogEntry) => clockString(new Date(a.timestamp)) },
+        { header: "City", value: (a: AlertLogEntry) => a.city },
+        { header: "Source", value: (a: AlertLogEntry) => String(a.source) },
+        { header: "Severity", value: (a: AlertLogEntry) => a.severity.toUpperCase() },
+      ],
+      rows: alertLog,
+      emptyMessage: "No alerts",
+    });
+    if (!ok) toast.error("Your browser blocked the report window.");
   }
 
   return (
