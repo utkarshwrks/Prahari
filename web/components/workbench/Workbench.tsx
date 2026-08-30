@@ -5,6 +5,7 @@ import ActorList from "./ActorList";
 import ActorProfileView from "./ActorProfile";
 import AuditPanel from "./AuditPanel";
 import TimingPanel from "./TimingPanel";
+import ChainPanel from "./ChainPanel";
 import EvidenceTrail from "./EvidenceTrail";
 import Header from "./Header";
 
@@ -40,6 +41,9 @@ export default function Workbench() {
           </div>
           <div className="min-h-[300px] shrink-0">
             <TimingPanel />
+          </div>
+          <div className="min-h-[300px] shrink-0">
+            <ChainPanel />
           </div>
           <div className="min-h-[380px] shrink-0">
             <AuditPanel />

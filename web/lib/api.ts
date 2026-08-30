@@ -45,6 +45,8 @@ export const api = {
   version: () => call<VersionResult>("version"),
   torStart: (n = 24) => call<TorStatus>(`tor/experiment?n=${n}`, { method: "POST" }),
   torStatus: () => call<TorStatus>("tor/status"),
+  clusters: () => call<ClusterResult>("chain/clusters"),
+  trace: (address: string) => call<TraceResult>(`chain/trace?address=${encodeURIComponent(address)}`),
   extract: (text: string) =>
     call<ExtractResult>("extract", {
       method: "POST",
@@ -166,6 +168,18 @@ export interface VersionResult {
   service: string; version: string; environment: string;
   capabilities: Record<string, { enabled: boolean; detail: string }>;
 }
+export interface WalletCluster {
+  cluster_id: string; addresses: string[]; tx_count: number;
+  reaches: { address: string; label: string; kind: string }[];
+  risk: string;
+}
+export interface ClusterResult { ok: boolean; count: number; clusters: WalletCluster[]; co_spent_edges: number }
+export interface TraceResult {
+  ok: boolean; address: string; source?: string; transactions?: number;
+  multi_input_txs?: number; clusters?: number; co_spent_edges?: number;
+  target_cluster?: WalletCluster | null; detail?: string;
+}
+
 export interface TorResult {
   confidence: number; peak_lag_ms: number; pearson: number;
   n_client: number; n_service: number; matched: number; bin_ms: number; detail: string;
