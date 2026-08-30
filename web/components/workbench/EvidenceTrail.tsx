@@ -103,37 +103,27 @@ export default function EvidenceTrail({ pairId }: { pairId: string | null }) {
               <h4 className="mono mb-1 flex items-center gap-1.5 text-[10px] uppercase tracking-[0.16em] text-[var(--muted)]">
                 <Sigma className="h-3 w-3" /> Likelihood ratios by root
               </h4>
-              <table className="mono w-full text-[10px]">
-                <thead>
-                  <tr className="text-[var(--muted-2)]">
-                    <th className="py-1 text-left font-normal">Root</th>
-                    <th className="py-1 text-right font-normal">s</th>
-                    <th className="py-1 text-right font-normal">LR</th>
-                    <th className="py-1 text-right font-normal">r</th>
-                    <th className="py-1 text-right font-normal">LR^r</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {roots.map(([root, v]) => (
-                    <tr key={root} className="border-t border-[var(--border)]">
-                      <td className="py-1 text-[var(--text)]">{ROOT_LABEL[root] ?? root}</td>
-                      <td className="tnum py-1 text-right text-[var(--muted)]">{v.s.toFixed(2)}</td>
-                      <td className="tnum py-1 text-right text-[var(--muted)]">{v.lr.toFixed(3)}</td>
-                      <td className="tnum py-1 text-right text-[var(--muted-2)]">{v.r}</td>
-                      <td className="tnum py-1 text-right text-[var(--c-high)]">{v.lr_pow_r.toFixed(3)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-
-              <div className="mt-2 space-y-1">
+              {/* One block per root: the numbers and the bar together, so there
+                  is no separate bar list duplicating the table below it. */}
+              <div className="mono space-y-2.5">
+                <div className="flex items-center gap-2 text-[8.5px] uppercase tracking-wider text-[var(--muted-2)]">
+                  <span className="flex-1">Root</span>
+                  <span className="tnum w-8 text-right">s</span>
+                  <span className="tnum w-12 text-right">LR</span>
+                  <span className="tnum w-6 text-right">r</span>
+                  <span className="tnum w-12 text-right">LR^r</span>
+                </div>
                 {roots.map(([root, v]) => (
-                  <div key={root} className="flex items-center gap-2">
-                    <span className="mono w-20 shrink-0 truncate text-[9px] text-[var(--muted-2)]">
-                      {ROOT_LABEL[root] ?? root}
-                    </span>
-                    <span className="bar flex-1">
-                      <span style={{ width: `${(v.lr_pow_r / maxBar) * 100}%`, background: "var(--accent)" }} />
+                  <div key={root} className="space-y-1 border-t border-[var(--border)] pt-1.5">
+                    <div className="flex items-center gap-2 text-[10px]">
+                      <span className="flex-1 truncate text-[var(--text)]">{ROOT_LABEL[root] ?? root}</span>
+                      <span className="tnum w-8 text-right text-[var(--muted)]">{v.s.toFixed(2)}</span>
+                      <span className="tnum w-12 text-right text-[var(--muted)]">{v.lr.toFixed(3)}</span>
+                      <span className="tnum w-6 text-right text-[var(--muted-2)]">{v.r}</span>
+                      <span className="tnum w-12 text-right font-bold text-[var(--c-high)]">{v.lr_pow_r.toFixed(3)}</span>
+                    </div>
+                    <span className="bar block">
+                      <span style={{ width: `${(v.lr_pow_r / maxBar) * 100}%`, background: "linear-gradient(90deg, var(--accent-dim), var(--accent))" }} />
                     </span>
                   </div>
                 ))}

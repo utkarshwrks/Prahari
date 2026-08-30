@@ -93,11 +93,13 @@ export default function Workbench() {
           </button>
         ))}
       </div>
+      {/* All four stay mounted (hidden when inactive) so a long-running job —
+          the live Tor experiment above all — survives switching tabs. */}
       <div className="slim min-h-0 flex-1 overflow-y-auto">
-        {tab === "evidence" && <EvidenceTrail pairId={pairId} />}
-        {tab === "timing" && <TimingPanel />}
-        {tab === "chain" && <ChainPanel />}
-        {tab === "audit" && <AuditPanel />}
+        <div className={tab === "evidence" ? "h-full" : "hidden"}><EvidenceTrail pairId={pairId} /></div>
+        <div className={tab === "timing" ? "h-full" : "hidden"}><TimingPanel /></div>
+        <div className={tab === "chain" ? "h-full" : "hidden"}><ChainPanel /></div>
+        <div className={tab === "audit" ? "h-full" : "hidden"}><AuditPanel /></div>
       </div>
     </aside>
   );

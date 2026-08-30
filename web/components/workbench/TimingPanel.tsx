@@ -17,21 +17,25 @@ import { confidenceColor } from "../ui/Confidence";
  * When Tor cannot bootstrap it falls back to a controlled replay over the same
  * correlation engine, and the badge says `simulated` so nothing is misrepresented.
  */
+const ACTIVE = ["starting", "bootstrapping", "probing"];
+
 export default function TimingPanel() {
   const [s, setS] = useState<TorStatus | null>(null);
   const [running, setRunning] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
   const poll = useRef<ReturnType<typeof setInterval> | null>(null);
+  const clock = useRef<ReturnType<typeof setInterval> | null>(null);
+  const t0 = useRef<number>(0);
 
   const stop = useCallback(() => {
     if (poll.current) { clearInterval(poll.current); poll.current = null; }
+    if (clock.current) { clearInterval(clock.current); clock.current = null; }
   }, []);
 
-  useEffect(() => () => stop(), [stop]);
-
-  async function run() {
-    setRunning(true);
-    await api.torStart(20);
+  const startPolling = useCallback(() => {
     stop();
+    t0.current = Date.now();
+    clock.current = setInterval(() => setElapsed(Math.round((Date.now() - t0.current) / 1000)), 500);
     poll.current = setInterval(async () => {
       const d = await api.torStatus();
       if ("engine" in d && d.engine === "offline") { stop(); setRunning(false); return; }
@@ -42,6 +46,29 @@ export default function TimingPanel() {
         }
       }
     }, 1200);
+  }, [stop]);
+
+  // Reconnect to an experiment already running (or finished) from a previous
+  // mount or page load, so switching tabs never appears to lose the run.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const d = await api.torStatus();
+      if (!alive || !("state" in d)) return;
+      const st = d as TorStatus;
+      if (st.state === "idle") return;
+      setS(st);
+      if (ACTIVE.includes(st.state)) { setRunning(true); startPolling(); }
+    })();
+    return () => { alive = false; stop(); };
+  }, [startPolling, stop]);
+
+  async function run() {
+    setRunning(true);
+    setS(null);
+    setElapsed(0);
+    await api.torStart(20);
+    startPolling();
   }
 
   const conf = s?.result?.confidence ?? 0;
@@ -84,7 +111,10 @@ export default function TimingPanel() {
         {s && (
           <div className="mt-3 space-y-3">
             <div className="flex items-center gap-2">
-              <span className="mono text-[9px] uppercase tracking-[0.14em] text-[var(--muted-2)]">
+              <span className="mono flex items-center gap-1.5 text-[9px] uppercase tracking-[0.14em] text-[var(--muted-2)]">
+                {ACTIVE.includes(s.state) && (
+                  <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-[var(--accent)]" />
+                )}
                 {stateLabel[s.state] ?? s.state}
               </span>
               {s.state === "bootstrapping" && (
@@ -92,7 +122,16 @@ export default function TimingPanel() {
                   <span style={{ width: `${s.bootstrap_pct}%`, background: "var(--muted)" }} />
                 </span>
               )}
+              {ACTIVE.includes(s.state) && (
+                <span className="mono tnum ml-auto shrink-0 text-[9px] text-[var(--muted-2)]">{elapsed}s</span>
+              )}
             </div>
+            {ACTIVE.includes(s.state) && (
+              <p className="mono text-[8.5px] leading-relaxed text-[var(--muted-2)]">
+                A real Tor circuit is bootstrapping and probing our own hidden service —
+                this takes ~30–40s. You can switch tabs; the run keeps going.
+              </p>
+            )}
 
             {s.onion && (
               <p className="mono truncate text-[9px] text-[var(--muted-2)]" title={s.onion}>

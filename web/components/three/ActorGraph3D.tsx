@@ -195,31 +195,56 @@ function GraphScene({
       {nodes.map((n) => {
         const sel = selected === n.id;
         const dim = hover && !isConnected(n.id);
-        const showLabel = sel || hover === n.id || n.kind === "actor" || n.kind === "persona";
+        // Only the actor is labelled at rest — persona/identifier labels would
+        // collide in the tight central cluster. Everything else reveals its
+        // label on hover or when selected. Colour + legend carry type at rest.
+        const showLabel = sel || hover === n.id || n.kind === "actor";
+        // Push the label radially OUTWARD from the graph centre so it clears the
+        // central cluster instead of landing on a neighbouring node.
+        const p = pos(n);
+        const r = Math.hypot(p.x, p.y, p.z);
+        const out = r > 0.05
+          ? new THREE.Vector3(p.x / r, p.y / r, p.z / r)
+          : new THREE.Vector3(0, 1, 0);
+        const labelPos: [number, number, number] = [
+          out.x * (n.size + 0.34),
+          out.y * (n.size + 0.34) + 0.06,
+          out.z * (n.size + 0.34),
+        ];
         return (
-          <group key={n.id} position={pos(n)}>
+          <group key={n.id} position={p}>
+            {/* soft glow halo — cheap bloom */}
+            <mesh>
+              <sphereGeometry args={[n.size * (sel ? 2.3 : 1.7), 16, 16]} />
+              <meshBasicMaterial color={n.color} transparent opacity={dim ? 0.03 : sel ? 0.14 : 0.07}
+                blending={THREE.AdditiveBlending} depthWrite={false} />
+            </mesh>
             <mesh
               onPointerOver={(e) => { e.stopPropagation(); setHover(n.id); }}
               onPointerOut={() => setHover(null)}
               onClick={(e) => { e.stopPropagation(); onSelect({ type: "node", id: n.id, label: n.label, kind: n.kind, detail: n.detail }); }}
             >
-              <sphereGeometry args={[n.size * (sel ? 1.25 : 1), 20, 20]} />
+              <sphereGeometry args={[n.size * (sel ? 1.25 : 1), 32, 32]} />
               <meshStandardMaterial
                 color={n.color} emissive={n.color}
-                emissiveIntensity={sel ? 0.9 : n.kind === "actor" ? 0.6 : 0.32}
-                roughness={0.35} transparent opacity={dim ? 0.25 : 1}
+                emissiveIntensity={sel ? 1.0 : n.kind === "actor" ? 0.7 : 0.36}
+                roughness={0.3} metalness={0.1} transparent opacity={dim ? 0.25 : 1}
               />
             </mesh>
             {sel && (
               <mesh>
-                <ringGeometry args={[n.size * 1.4, n.size * 1.55, 32]} />
-                <meshBasicMaterial color={n.color} side={THREE.DoubleSide} transparent opacity={0.7} />
+                <ringGeometry args={[n.size * 1.45, n.size * 1.62, 40]} />
+                <meshBasicMaterial color={n.color} side={THREE.DoubleSide} transparent opacity={0.8} />
               </mesh>
             )}
             {showLabel && (
-              <Billboard position={[0, n.size + 0.22, 0]}>
-                <Text fontSize={0.14} color="#e9e9ee" anchorX="center" anchorY="middle"
-                  outlineWidth={0.01} outlineColor="#0b0b0e">
+              <Billboard position={labelPos}>
+                <Text
+                  fontSize={n.kind === "actor" ? 0.17 : 0.135}
+                  color="#F4F4F7" anchorX="center" anchorY="middle"
+                  outlineWidth={0.03} outlineColor="#050507" outlineOpacity={0.9}
+                  fillOpacity={dim ? 0.35 : 1}
+                >
                   {n.label}
                 </Text>
               </Billboard>

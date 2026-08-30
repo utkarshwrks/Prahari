@@ -101,7 +101,7 @@ export default function ActorGraphPanel({
       {use3d && !sel && (
         <p className="pointer-events-none absolute bottom-2 right-2 z-10 max-w-[46%] text-right mono text-[8.5px] leading-snug text-[var(--muted-2)]">
           Edge thickness = evidence strength. Shared identifiers pull personas into one actor;
-          a decoy sharing nothing drifts to the rim.
+          a decoy sharing nothing drifts to the rim. Hover any node for its name.
         </p>
       )}
 
