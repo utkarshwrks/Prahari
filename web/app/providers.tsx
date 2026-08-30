@@ -2,11 +2,13 @@
 
 import { SessionProvider } from "next-auth/react";
 import { Toaster } from "sonner";
+import ThemeControl from "@/components/system/ThemeControl";
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   return (
     <SessionProvider>
       {children}
+      <ThemeControl />
       <Toaster
         position="bottom-right"
         toastOptions={{

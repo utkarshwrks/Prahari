@@ -1,14 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   AlertTriangle, Copy, Download, ExternalLink, Fingerprint, Globe, KeyRound, Mail, Server, Wallet,
 } from "lucide-react";
-import { api, type ActorProfile as Profile, type Timeline } from "@/lib/api";
+import { type ActorProfile as Profile, type Timeline } from "@/lib/api";
 import Confidence from "../ui/Confidence";
 import Panel from "../ui/Panel";
 import ActorTimeline from "./ActorTimeline";
-import ActorGraphPanel from "./ActorGraphPanel";
 
 const IDENT_ICON: Record<string, typeof KeyRound> = {
   pgp: KeyRound, wallet: Wallet, email: Mail, onion: Globe,
@@ -17,27 +16,16 @@ const IDENT_ICON: Record<string, typeof KeyRound> = {
 const short = (v: string) => (v.length > 26 ? `${v.slice(0, 14)}…${v.slice(-8)}` : v);
 
 export default function ActorProfileView({
-  actorId, onOpenPair,
-}: { actorId: string | null; onOpenPair: (pairId: string) => void }) {
-  const [p, setP] = useState<Profile | null>(null);
-  const [tl, setTl] = useState<Timeline | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!actorId) return;
-    let alive = true;
-    setP(null); setTl(null); setErr(null);
-    (async () => {
-      const d = await api.actor(actorId);
-      if (!alive) return;
-      if ("engine" in d && d.engine === "offline") setErr(d.detail ?? "Engine offline.");
-      else if ("ok" in d && d.ok) setP(d as Profile);
-      else setErr((d as Profile).detail ?? "Unknown actor.");
-      const t = await api.timeline(actorId);
-      if (alive && "ok" in t && t.ok) setTl(t as Timeline);
-    })();
-    return () => { alive = false; };
-  }, [actorId]);
+  actorId, profile, timeline, err, onOpenPair,
+}: {
+  actorId: string | null;
+  profile: Profile | null;
+  timeline: Timeline | null;
+  err: string | null;
+  onOpenPair: (pairId: string) => void;
+}) {
+  const p = profile;
+  const tl = timeline;
 
   if (!actorId) {
     return (
@@ -78,9 +66,6 @@ export default function ActorProfileView({
 
         {p && (
           <div className="space-y-4">
-            {/* The graph is the anchor: the actor and its strongest ties, in 3D. */}
-            <ActorGraphPanel profile={p} onOpenPair={onOpenPair} />
-
             {/* Headline: who, and how sure. */}
             <header className="flex items-start justify-between gap-4">
               <div className="min-w-0">

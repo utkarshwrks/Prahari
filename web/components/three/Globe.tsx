@@ -7,11 +7,18 @@ import * as THREE from "three";
 import { NODES, arcCurve, latLngToVec3 } from "./geo";
 
 const R = 2;
-const ACCENT = "#E8503A";
-const BLUE = "#5B9BD5";
-const AMBER = "#D9A441";
 
-const KIND_COLOR = { market: ACCENT, clearnet: BLUE, mixer: AMBER } as const;
+// Read the live skin colours so the hero globe matches whatever skin was drawn.
+function cssVar(name: string, fallback: string): string {
+  if (typeof window === "undefined") return fallback;
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return v || fallback;
+}
+const palette = () => ({
+  accent: cssVar("--accent", "#E8503A"),
+  accent2: cssVar("--accent-2", "#D9A441"),
+  text: cssVar("--muted", "#5B9BD5"),
+});
 
 /** The point-cloud sphere — a globe drawn as a field of dots, not a texture. */
 function Sphere() {
@@ -96,6 +103,11 @@ function Scene() {
     if (group.current) group.current.rotation.y += delta * 0.06;
   });
 
+  const P = useMemo(() => palette(), []);
+  const KIND_COLOR: Record<string, string> = {
+    market: P.accent, clearnet: P.text, mixer: P.accent2,
+  };
+
   const nodes = useMemo(
     () => NODES.map((n) => ({ ...n, pos: latLngToVec3(n.lat, n.lng, R) })),
     []
@@ -109,11 +121,11 @@ function Scene() {
     markets.forEach((m, i) => {
       const t1 = targets[(i * 2) % targets.length];
       const t2 = targets[(i * 2 + 1) % targets.length];
-      out.push({ curve: arcCurve(m.pos, t1.pos, 0.45), color: ACCENT });
-      out.push({ curve: arcCurve(m.pos, t2.pos, 0.55), color: t2.kind === "mixer" ? AMBER : BLUE });
+      out.push({ curve: arcCurve(m.pos, t1.pos, 0.45), color: P.accent });
+      out.push({ curve: arcCurve(m.pos, t2.pos, 0.55), color: t2.kind === "mixer" ? P.accent2 : P.text });
     });
     return out;
-  }, [nodes]);
+  }, [nodes, P]);
 
   return (
     <group ref={group} rotation={[0.35, 0, 0.1]}>
@@ -133,6 +145,11 @@ function Scene() {
   );
 }
 
+function SceneLight() {
+  const color = useMemo(() => palette().accent, []);
+  return <pointLight position={[5, 3, 5]} intensity={0.8} color={color} />;
+}
+
 export default function Globe() {
   return (
     <Canvas
@@ -142,7 +159,7 @@ export default function Globe() {
       style={{ background: "transparent" }}
     >
       <ambientLight intensity={0.6} />
-      <pointLight position={[5, 3, 5]} intensity={0.8} color={ACCENT} />
+      <SceneLight />
       <Scene />
     </Canvas>
   );

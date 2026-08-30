@@ -1,4 +1,4 @@
-giv![alt text](image.png)# PRAHARI · प्रहरी — "The Sentinel That Never Sleeps"
+# PRAHARI · प्रहरी — "The Sentinel That Never Sleeps"
 
 **Dark-web threat-actor attribution and geofencing control room for the Madhya Pradesh Police Cyber Cell, Jabalpur.**
 Smart India Hackathon 2026 · PS 26151 (NTRO) · Team Vasiliades.

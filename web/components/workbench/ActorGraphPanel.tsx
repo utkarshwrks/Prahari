@@ -26,8 +26,8 @@ const LEGEND: { color: string; label: string }[] = [
  * falls back to a legible 2D linkage list — the information always survives.
  */
 export default function ActorGraphPanel({
-  profile, onOpenPair,
-}: { profile: ActorProfile; onOpenPair: (id: string) => void }) {
+  profile, onOpenPair, fill = false,
+}: { profile: ActorProfile; onOpenPair: (id: string) => void; fill?: boolean }) {
   const [use3d, setUse3d] = useState(false);
   const [sel, setSel] = useState<GraphSelection>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -54,9 +54,10 @@ export default function ActorGraphPanel({
 
   return (
     <div
-      className={`relative overflow-hidden border border-[var(--border)] bg-[radial-gradient(circle_at_50%_40%,#14151d,#0b0b0e)] transition-[height] ${
-        big ? "h-[520px]" : "h-[340px]"
+      className={`relative overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] transition-[height] ${
+        fill ? "h-full" : big ? "h-[520px]" : "h-[340px]"
       }`}
+      style={{ background: "radial-gradient(circle at 50% 38%, color-mix(in srgb, var(--elevated) 55%, transparent), var(--bg-2))" }}
     >
       {/* header row */}
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between p-2">

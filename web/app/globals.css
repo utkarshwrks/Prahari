@@ -3,38 +3,86 @@
 @tailwind utilities;
 
 /* ==========================================================================
-   PRAHARI v2 — attribution workbench
+   PRAHARI — generative design system
 
-   An analyst reads this for a whole shift, so it is built for long looking:
-   near-black ground, one accent, generous type. The accent is reserved for
-   ATTRIBUTION CONFIDENCE and nothing else — when everything is red, nothing
-   reads as important.
+   The app reskins itself every load. All colour, shape and display-type lives
+   in tokens; a skin (html[data-skin]) is a coherent override of them. Six skins,
+   each hand-tuned, so a random draw is always a good one. Components below read
+   only tokens, so they reskin for free.
    ========================================================================== */
 
 :root {
+  /* structure — overridden per skin */
   --bg:        #0B0B0E;
+  --bg-2:      #08080B;
   --surface:   #131318;
   --surface-2: #1A1A21;
+  --elevated:  #202029;
   --border:    #24242C;
-  --border-2:  #32323C;
+  --border-2:  #34343F;
 
   --text:      #EDEDF0;
   --muted:     #9A9AA6;
   --muted-2:   #63636E;
 
-  /* Confidence ramp. Deliberately not a red/green pass-fail: attribution is a
-     degree, and colour should say "how much", not "yes or no". */
-  --c-high:    #E8503A;
-  --c-mid:     #D9A441;
-  --c-low:     #5B6B7F;
   --accent:    #E8503A;
+  --accent-2:  #D9A441;
   --accent-dim:#8E3324;
+
+  /* confidence ramp — a degree, not a verdict */
+  --c-high:    var(--accent);
+  --c-mid:     var(--accent-2);
+  --c-low:     #5B6B7F;
 
   --ok:        #4FA97E;
   --warn:      #D9A441;
   --danger:    #E8503A;
 
-  --radius: 3px;
+  --radius: 4px;
+  --radius-lg: 8px;
+  --halo: color-mix(in srgb, var(--accent) 12%, transparent);
+  --grid: color-mix(in srgb, var(--text) 3%, transparent);
+  --font-disp: var(--font-display);
+  --font-code: var(--font-mono);
+}
+
+/* ---- skins ------------------------------------------------------------- */
+
+html[data-skin="ember"] {
+  --bg:#0B0B0E; --bg-2:#070709; --surface:#131318; --surface-2:#1A1A21; --elevated:#232330;
+  --border:#24242C; --border-2:#38323A; --text:#F1ECEA; --muted:#9C948F; --muted-2:#645C58;
+  --accent:#F05A3E; --accent-2:#E7A548; --accent-dim:#8E3324; --c-low:#6B5F63;
+  --radius:3px; --radius-lg:6px; --font-disp:var(--font-display);
+}
+html[data-skin="abyss"] {
+  --bg:#070B14; --bg-2:#04070E; --surface:#0D1524; --surface-2:#121C31; --elevated:#182642;
+  --border:#1A2740; --border-2:#274069; --text:#E6EDF8; --muted:#8C9BB8; --muted-2:#556278;
+  --accent:#3FBEF8; --accent-2:#818CF8; --accent-dim:#255f86; --c-low:#4E6180;
+  --radius:6px; --radius-lg:12px; --font-disp:var(--font-display-c);
+}
+html[data-skin="verdant"] {
+  --bg:#07110D; --bg-2:#040A07; --surface:#0D1A14; --surface-2:#12241B; --elevated:#173626;
+  --border:#173224; --border-2:#245039; --text:#E7F3EC; --muted:#8DB39D; --muted-2:#557060;
+  --accent:#37D399; --accent-2:#A3E635; --accent-dim:#1e7b59; --c-low:#4E7A66;
+  --radius:5px; --radius-lg:10px; --font-disp:var(--font-display-b);
+}
+html[data-skin="plasma"] {
+  --bg:#0B0710; --bg-2:#07040B; --surface:#150E1E; --surface-2:#1E1429; --elevated:#2C1E3B;
+  --border:#241a32; --border-2:#3f2b57; --text:#F0EAF6; --muted:#AB9BC0; --muted-2:#6E5C82;
+  --accent:#C084FC; --accent-2:#F472B6; --accent-dim:#7c3aad; --c-low:#6E5C82;
+  --radius:8px; --radius-lg:16px; --font-disp:var(--font-display-c);
+}
+html[data-skin="solar"] {
+  --bg:#0E0A06; --bg-2:#090603; --surface:#17110A; --surface-2:#221810; --elevated:#33260f;
+  --border:#2a2013; --border-2:#4d3a1f; --text:#F5ECE0; --muted:#B3A48F; --muted-2:#786957;
+  --accent:#FB923C; --accent-2:#FBBF24; --accent-dim:#a85a1a; --c-low:#7A6A55;
+  --radius:2px; --radius-lg:4px; --font-disp:var(--font-display);
+}
+html[data-skin="arctic"] {
+  --bg:#080C10; --bg-2:#04070A; --surface:#101820; --surface-2:#16222D; --elevated:#1e2f3d;
+  --border:#1a2731; --border-2:#294050; --text:#E8F0F5; --muted:#93A7B5; --muted-2:#5A7080;
+  --accent:#22D3EE; --accent-2:#60A5FA; --accent-dim:#177f8f; --c-low:#4E6980;
+  --radius:5px; --radius-lg:10px; --font-disp:var(--font-display-b);
 }
 
 * { border-color: var(--border); }
@@ -44,35 +92,86 @@ html, body {
   color: var(--text);
   -webkit-font-smoothing: antialiased;
 }
-
 body {
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  position: relative;
 }
 
-.mono { font-family: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace; }
-.display { font-family: var(--font-display), var(--font-sans), system-ui, sans-serif; }
+/* Per-skin atmosphere: a soft accent halo + a faint grid, painted behind all
+   content. Gives each skin a signature ground without touching any component. */
+body::before {
+  content: "";
+  position: fixed; inset: 0; z-index: -2;
+  background:
+    radial-gradient(120% 90% at 82% -10%, var(--halo), transparent 60%),
+    radial-gradient(90% 70% at 0% 110%, color-mix(in srgb, var(--accent-2) 8%, transparent), transparent 55%),
+    var(--bg);
+}
+body::after {
+  content: "";
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(120% 100% at 50% 0%, black, transparent 75%);
+  opacity: 0.5;
+}
+
+.mono { font-family: var(--font-code), ui-monospace, SFMono-Regular, Menlo, monospace; }
+.display { font-family: var(--font-disp), var(--font-sans), system-ui, sans-serif; }
 
 /* ---- surfaces ---------------------------------------------------------- */
 
 .panel {
-  background: var(--surface);
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
+  backdrop-filter: blur(6px);
 }
-
-.panel-2 { background: var(--surface-2); }
-
+.panel-2 { background: var(--surface-2); border-radius: var(--radius); }
 .hairline { border-bottom: 1px solid var(--border); }
 
-/* A restrained corner treatment. One accent mark, not four brackets. */
+.glass {
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  backdrop-filter: blur(10px) saturate(1.1);
+}
+
+/* One accent mark, not four brackets. */
 .marked { position: relative; }
 .marked::before {
   content: "";
-  position: absolute;
-  left: -1px; top: -1px;
-  width: 2px; height: 18px;
-  background: var(--accent);
+  position: absolute; left: 0; top: 12px; bottom: 12px;
+  width: 2px; border-radius: 2px;
+  background: linear-gradient(var(--accent), var(--accent-2));
 }
+
+.accent-text { color: var(--accent); }
+.grad-text {
+  background: linear-gradient(100deg, var(--accent), var(--accent-2));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+
+/* ---- buttons ----------------------------------------------------------- */
+
+.btn {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.9rem;
+  font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--muted);
+  transition: all 0.16s ease;
+}
+.btn:hover { color: var(--text); border-color: color-mix(in srgb, var(--accent) 55%, var(--border-2)); }
+.btn-accent {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--c-high);
+}
+.btn-accent:hover { background: color-mix(in srgb, var(--accent) 24%, transparent); color: var(--c-high); }
 
 /* ---- confidence ------------------------------------------------------- */
 
@@ -80,87 +179,62 @@ body {
 .conf-mid  { color: var(--c-mid); }
 .conf-low  { color: var(--c-low); }
 
-.bar {
-  height: 4px;
-  background: var(--surface-2);
-  border-radius: 2px;
-  overflow: hidden;
-}
-.bar > span { display: block; height: 100%; border-radius: 2px; }
+.bar { height: 5px; background: color-mix(in srgb, var(--text) 8%, transparent); border-radius: 3px; overflow: hidden; }
+.bar > span { display: block; height: 100%; border-radius: 3px; }
 
-/* ---- scrollbars -------------------------------------------------------- */
-
-.slim::-webkit-scrollbar { width: 8px; height: 8px; }
-.slim::-webkit-scrollbar-track { background: transparent; }
-.slim::-webkit-scrollbar-thumb {
-  background: var(--border-2);
-  border-radius: 4px;
-}
-.slim::-webkit-scrollbar-thumb:hover { background: var(--muted-2); }
-.slim { scrollbar-width: thin; scrollbar-color: var(--border-2) transparent; }
-
-/* ---- focus ------------------------------------------------------------- */
-
-:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-/* ---- accessibility ----------------------------------------------------- */
-
-/* Visually hidden but announced. Used for live regions. */
-.sr-only {
-  position: absolute;
-  width: 1px; height: 1px;
-  padding: 0; margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-/*
-  Motion is reduced, information is not. Nothing here conveys meaning through
-  movement alone, so stopping animation costs the reader nothing.
-*/
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
-    scroll-behavior: auto !important;
-  }
-}
-
-/*
-  Touch targets gate on POINTER TYPE, not viewport width. A narrow desktop
-  window is still mouse-driven; a large tablet still needs 44px.
-*/
-@media (pointer: coarse) {
-  button, a[href], [role="radio"], [role="tab"], [role="button"], label:has(input) {
-    min-height: 44px;
-    min-width: 44px;
-  }
-}
-
-/* ---- utilities --------------------------------------------------------- */
-
-.tnum { font-variant-numeric: tabular-nums; }
+/* ---- chips ------------------------------------------------------------- */
 
 .chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
+  display: inline-flex; align-items: center; gap: 0.25rem;
   border: 1px solid var(--border-2);
-  background: var(--surface-2);
-  padding: 0.1rem 0.4rem;
-  border-radius: var(--radius);
-  font-size: 10px;
-  line-height: 1.4;
-  color: var(--muted);
+  background: color-mix(in srgb, var(--surface-2) 80%, transparent);
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  font-size: 10px; line-height: 1.4; color: var(--muted);
 }
 .chip-accent {
   border-color: color-mix(in srgb, var(--accent) 45%, transparent);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   color: var(--c-high);
+}
+
+/* ---- scrollbars -------------------------------------------------------- */
+
+.slim::-webkit-scrollbar { width: 8px; height: 8px; }
+.slim::-webkit-scrollbar-track { background: transparent; }
+.slim::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 4px; }
+.slim::-webkit-scrollbar-thumb:hover { background: var(--muted-2); }
+.slim { scrollbar-width: thin; scrollbar-color: var(--border-2) transparent; }
+
+/* ---- focus / a11y ------------------------------------------------------ */
+
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+}
+
+.tnum { font-variant-numeric: tabular-nums; }
+
+/* ---- motion ------------------------------------------------------------ */
+
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.rise { animation: rise 0.5s cubic-bezier(0.22,1,0.36,1) both; }
+@keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+.shimmer {
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 18%, transparent), transparent);
+  background-size: 200% 100%; animation: shimmer 1.4s linear infinite;
+}
+@keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 40%, transparent); } 70%,100% { box-shadow: 0 0 0 10px transparent; } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important; animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important; scroll-behavior: auto !important;
+  }
+}
+@media (pointer: coarse) {
+  button, a[href], [role="radio"], [role="tab"], [role="button"], label:has(input) {
+    min-height: 44px; min-width: 44px;
+  }
 }

@@ -118,9 +118,9 @@ function GraphScene({
       n.z = (Math.random() - 0.5) * 1.5;
     });
     const sim = forceSimulation<N>(nodes)
-      .force("charge", forceManyBody().strength(-3.2))
+      .force("charge", forceManyBody().strength(-4.4))
       .force("link", forceLink<N, L>(links).id((d) => d.id)
-        .distance((l) => 1.55 - l.strength * 0.55)
+        .distance((l) => 1.75 - l.strength * 0.5)
         .strength((l) => 0.1 + l.strength * 0.6))
       .stop();
     for (let i = 0; i < 300; i++) {
@@ -217,8 +217,8 @@ function GraphScene({
               </mesh>
             )}
             {showLabel && (
-              <Billboard position={[0, n.size + 0.16, 0]}>
-                <Text fontSize={0.15} color="#e9e9ee" anchorX="center" anchorY="middle"
+              <Billboard position={[0, n.size + 0.22, 0]}>
+                <Text fontSize={0.14} color="#e9e9ee" anchorX="center" anchorY="middle"
                   outlineWidth={0.01} outlineColor="#0b0b0e">
                   {n.label}
                 </Text>
