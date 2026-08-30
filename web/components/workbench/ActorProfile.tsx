@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import {
-  AlertTriangle, Download, Fingerprint, Globe, KeyRound, Mail, Server, Wallet,
+  AlertTriangle, Copy, Download, ExternalLink, Fingerprint, Globe, KeyRound, Mail, Server, Wallet,
 } from "lucide-react";
 import { api, type ActorProfile as Profile, type Timeline } from "@/lib/api";
 import Confidence from "../ui/Confidence";
@@ -157,29 +157,9 @@ export default function ActorProfileView({
                 </p>
               ) : (
                 <ul className="space-y-1">
-                  {p.identifiers.map((i) => {
-                    const Icon = IDENT_ICON[i.kind] ?? Fingerprint;
-                    return (
-                      <li
-                        key={`${i.kind}-${i.value}`}
-                        className={`flex items-center gap-2 border px-2.5 py-1.5 ${
-                          i.shared
-                            ? "border-[color-mix(in_srgb,var(--accent)_40%,transparent)] bg-[color-mix(in_srgb,var(--accent)_7%,transparent)]"
-                            : "border-[var(--border)] bg-[var(--surface-2)]"
-                        }`}
-                      >
-                        <Icon className={`h-3 w-3 shrink-0 ${i.shared ? "text-[var(--c-high)]" : "text-[var(--muted-2)]"}`} />
-                        <span className="mono min-w-0 flex-1 truncate text-[10px] text-[var(--text)]" title={i.value}>
-                          {short(i.value)}
-                        </span>
-                        {i.shared && (
-                          <span className="chip chip-accent shrink-0">
-                            shared × {i.personas.length}
-                          </span>
-                        )}
-                      </li>
-                    );
-                  })}
+                  {p.identifiers.map((i) => (
+                    <IdentifierRow key={`${i.kind}-${i.value}`} ident={i} />
+                  ))}
                 </ul>
               )}
             </section>
@@ -261,5 +241,71 @@ export default function ActorProfileView({
         )}
       </div>
     </Panel>
+  );
+}
+
+
+/** An identifier row you can act on: click to expand actions, copy the value,
+ *  or trace a wallet / onion in an external explorer. Shared identifiers are the
+ *  strongest evidence, so they stay visually marked. */
+function IdentifierRow({ ident }: { ident: Profile["identifiers"][number] }) {
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const Icon = IDENT_ICON[ident.kind] ?? Fingerprint;
+  const explorer =
+    ident.kind === "wallet"
+      ? `https://mempool.space/address/${ident.value}`
+      : ident.kind === "onion"
+        ? null
+        : null;
+
+  return (
+    <li
+      className={`border ${
+        ident.shared
+          ? "border-[color-mix(in_srgb,var(--accent)_40%,transparent)] bg-[color-mix(in_srgb,var(--accent)_7%,transparent)]"
+          : "border-[var(--border)] bg-[var(--surface-2)]"
+      }`}
+    >
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left"
+      >
+        <Icon className={`h-3 w-3 shrink-0 ${ident.shared ? "text-[var(--c-high)]" : "text-[var(--muted-2)]"}`} />
+        <span className="mono min-w-0 flex-1 truncate text-[10px] text-[var(--text)]" title={ident.value}>
+          {short(ident.value)}
+        </span>
+        {ident.shared && (
+          <span className="chip chip-accent shrink-0">shared × {ident.personas.length}</span>
+        )}
+      </button>
+      {open && (
+        <div className="flex flex-wrap items-center gap-1 border-t border-[var(--border)] px-2.5 py-1.5">
+          <button
+            onClick={() => {
+              navigator.clipboard?.writeText(ident.value);
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1200);
+            }}
+            className="mono flex items-center gap-1 border border-[var(--border-2)] px-1.5 py-0.5 text-[9px] text-[var(--muted)] transition hover:border-[var(--accent-dim)] hover:text-[var(--text)]"
+          >
+            <Copy className="h-2.5 w-2.5" /> {copied ? "copied" : "copy"}
+          </button>
+          {explorer && (
+            <a
+              href={explorer}
+              target="_blank"
+              rel="noreferrer"
+              className="mono flex items-center gap-1 border border-[var(--border-2)] px-1.5 py-0.5 text-[9px] text-[var(--muted)] transition hover:border-[var(--accent-dim)] hover:text-[var(--c-high)]"
+            >
+              <ExternalLink className="h-2.5 w-2.5" /> trace on chain
+            </a>
+          )}
+          <span className="mono ml-auto text-[9px] text-[var(--muted-2)]">
+            on {ident.personas.length} persona{ident.personas.length === 1 ? "" : "s"}
+          </span>
+        </div>
+      )}
+    </li>
   );
 }
