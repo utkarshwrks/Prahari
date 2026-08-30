@@ -1,0 +1,18 @@
+{
+  "cases": [
+    "decoy",
+    "multi_persona",
+    "rebrand",
+    "unrelated"
+  ],
+  "days": 90,
+  "labels": 3340,
+  "labels_digest": "3384a260be7e60c28bd1c45a44a8754287e7cc28b17b552242fa1b502930de7c",
+  "must_not_link": 1,
+  "n_actors": 120,
+  "negative_pairs": 3181,
+  "personas": 244,
+  "positive_pairs": 159,
+  "posts": 2928,
+  "seed": 20260920
+}

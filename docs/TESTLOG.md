@@ -166,3 +166,57 @@ all tests pass.
 **DEC-016 (Major)** — Postgres ENUM not dropped on downgrade, making the migration non-reversible.
 Found by the up/down/up test, not by review. Fresh clones worked; rebuilds failed with
 `DuplicateObject`. Fixed, and guarded by `test_up_down_up_is_clean`.
+
+---
+
+## Phase 3 — DATA — 31 August 2026
+
+### Automated
+
+| Command | Result | Count |
+|---|---|---|
+| `npm test` | **PASS** | 56 passed |
+| `npm run build` | **PASS** | clean |
+| `uv run pytest` | **PASS** | **92 passed** (26 → 92) |
+| Extraction P/R, 30 labelled sentences | **PASS** | EN R=1.000, HI R=1.000 (thresholds 0.85 / 0.70) |
+| Testbed determinism | **PASS** | same seed → identical digest; different seed differs |
+| Blocklist | **PASS** | 1,832 / 109,689 bodies dropped (1.67%), count asserted |
+
+### Manual (author-run)
+
+- [x] Loader run against the real 32 MB Agora CSV: 109,689 rows, **0 skipped**, 3,192 personas
+- [x] 1,000-row **real** fixture committed — verified genuine by header check, not fabricated
+- [x] DATASET mode streams real listings with entities; three opened and confirmed category-level
+- [x] Hinglish sentence through the analyzer — `jbp` and `katni` both resolve, engine badge correct
+- [x] PGP block → fingerprint computed via `pgpy` (not guessed)
+- [x] Testbed generated twice with the same seed → identical label digest
+- [x] Blocked how-to strings are dropped and the counter increments
+- [x] `docs/METRICS.md` extraction table filled; **0 pending cells remain**
+- [x] End-to-end through the proxy: `/feed` 1,000 items, `/extract` resolves `jbp` → Jabalpur
+- [x] Engine killed → workbench fully alive, DATASET degrades honestly
+
+### Claude
+
+**Not run.** D3.1 with N = 3, plus the fixture/PII sweep, in a fresh session.
+
+### Verdict
+
+**PASS — automated and manual layers green. Independent review outstanding.**
+
+### Defects found and fixed during the phase
+
+| ID | Severity | Finding |
+|---|---|---|
+| **FINDING-07** | Major | Fixed. `jbp` now resolves to Jabalpur; the geofence sees what the model found. 43 aliases, region terms explicitly refused. |
+| — | Major | **Testbed was too small to calibrate.** First run produced 21 positive pairs; Phase 7 conformal prediction at α=0.05 would have had ~10 in validation — statistically meaningless. Resized to 159 positives with a capped 20:1 ratio. |
+| — | Major | **Rebrand case was trivially solvable.** The pair shared an identical wallet address, so Phase 4's hard-identifier WCC would have merged it, proving nothing about style or timing. Changed to distinct addresses joined by a lineage (transfer) edge. |
+| — | Minor | `vendor@proton.test` yielded a spurious `@proton` handle, which would have become a false `social` edge. Handles are now matched on email- and telegram-masked text. |
+
+### Honest note on the reported 1.000 extraction scores
+
+The 30 labelled sentences and the alias table were authored together, so those figures are a
+**regression guard, not a generalisation estimate**. An independent probe using surface forms
+deliberately absent from the alias table scores **7/10**; all three misses are unseen misspellings
+and **none is a false positive**. Matching is exact-alias by design — a fabricated city
+manufactures a breach that never happened, which for a police tool is worse than missing one.
+Both directions are pinned (`test_never_invents_a_city`, `test_known_limit_unseen_typos_are_missed`).

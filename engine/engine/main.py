@@ -18,7 +18,7 @@ from fastapi.responses import JSONResponse
 from starlette.requests import Request
 
 from .logging_config import configure_logging
-from .routers import feed, health, sources
+from .routers import extract, feed, health, sources
 from .scheduler import start_scheduler, stop_scheduler
 from .settings import get_settings
 
@@ -74,6 +74,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(feed.router)
     app.include_router(sources.router)
+    app.include_router(extract.router)
     return app
 
 

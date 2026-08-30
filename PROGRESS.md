@@ -4,82 +4,86 @@ The single source of truth for project status. Updated at the end of every phase
 
 ---
 
-## Last phase — 2: FOUNDATION — 30 August 2026 — automated layer PASS
+## Last phase — 3: DATA — 31 August 2026 — automated layer PASS
 
-Rails only, no intelligence. The v1 workbench is untouched behaviourally.
+Real datasets, labelled testbed, deep extraction.
 
 **Shipped**
 
-- **Monorepo** — v1 app moved to `web/`, root npm workspace, `@/*` paths intact. Every route and all
-  45 v1 tests survived the move unchanged.
-- **Containers** — `docker-compose.yml` with Neo4j 5 Community + GDS and Postgres 16 + pgvector, both
-  native arm64. Verified `gds.wcc`/`gds.louvain`/`gds.fastRP` are present (what Phase 4 needs) and
-  pgvector's L2 operator works. Cold start to both-healthy: **24 s** (budget 60 s).
-- **Engine** — FastAPI on Python 3.12 (DEC-012). Settings with every key optional and a `capabilities()`
-  matrix that says what is disabled and why; structured JSON logging; pooled DB access with
-  `pool_pre_ping`; APScheduler heartbeat; `GET /health /version /feed /sources`; JSON 500 handler.
-- **Schema** — the nine ARCHITECTURE tables plus `users`, reversible migration, pgvector extension,
-  9-row source inventory seeded.
-- **Proxy** — `web/app/api/engine/[...path]/route.ts` with a route allowlist. `ENGINE_URL` is not
-  `NEXT_PUBLIC_`, so it cannot be inlined into a client bundle.
-- **Three-way mode** — `DEMO · DATASET · LIVE` replacing the boolean toggle, with v1's `setDemoMode`
-  clearing semantics preserved on all six transitions.
-- **CI** — GitHub Actions (DEC-010): web, engine, and five guardrail jobs (emoji, decorative glyphs,
-  `.onion`, committed secrets, product name). All five verified locally before commit.
+- **Testbed** (`engine/testbed/generate.py`) — fixed-seed synthetic ground truth: 244 personas,
+  2,928 posts, 3,340 labelled pairs (**159 positive**, 20:1 capped negatives), all four cases
+  injected. The only labelled dataset in the project, so every metric comes from here.
+- **Extraction** (`engine/extract/`) — Python port of `extractor.ts`, extended with PGP fingerprints
+  via `pgpy`, onion v3, Monero, email, Telegram, and spaCy. INV-3 preserved: never raises, always
+  names the engine that ran.
+- **Normalisation** (`engine/extract/normalise.py`) — **FINDING-07 fixed.** 43 aliases across the MP
+  gazetteer; `jbp`, `jblp`, `जबलपुर`, `murwara` all resolve. Region terms (`MP`, `India`) explicitly
+  refuse to resolve to a city.
+- **Agora loader** (`engine/ingest/kaggle_agora.py`) — full 109,689-row load, 0 skipped, 3,192
+  personas, **1,832 bodies (1.67%) dropped** by the content blocklist, count reported not hidden.
+  1,000-row real fixture committed.
+- **DATASET feed** — `/feed` serves real Agora listings with extracted entities, explicitly flagged
+  `geofenced: false`.
+- **`/extract`** — mirrors v1's `/api/analyze` with the fuller engine.
+- **OSINT + chain adapters** — v1's three sources ported to Python; mempool.space (no key) and
+  Etherscan (degrades honestly without a key).
 
 **Tests passing**
 
 | Command | Result |
 |---|---|
-| `npm test` | **56 passed** (3 files) — 45 v1 + 11 new mode tests |
-| `npm run build` | clean, `/api/engine/[...path]` present |
-| `uv run pytest` | **26 passed** |
-| migrations up/down/up | clean, 10 tables, 0 enums left behind |
-| engine boot, no `.env` | `/health` 200, scheduler running |
-| **engine killed** | `/login` 200, LIVE 200, NER 200, DATASET degrades at HTTP 200 |
-| client bundle leak scan | no `ENGINE_URL`, no key, no `localhost:8000` |
+| `npm test` | 56 passed |
+| `npm run build` | clean |
+| `uv run pytest` | **92 passed** (was 26) |
+| extraction P/R | English 1.000 / Hinglish 1.000 recall, thresholds 0.85 / 0.70 |
+| testbed determinism | same seed → identical digest |
+| end-to-end via proxy | `/feed` 1,000 items, `/extract` resolves `jbp` → Jabalpur |
+| engine killed | workbench fully alive, DATASET degrades honestly |
 
-**One real bug found and fixed (DEC-016)**
+**Honest note on the 1.000 extraction scores.** The labelled sentences and the alias table were
+authored together, so those figures are a regression guard, not a generalisation estimate. An
+independent probe of surface forms absent from the alias table scores **7/10**, with all three
+misses being unseen misspellings and **zero false positives**. Matching is deliberately
+exact-alias with no fuzzy fallback: a fabricated city manufactures a breach that never happened,
+which for a police tool is worse than missing one. Both directions are pinned by tests.
 
-The migration up/down/up test caught it: Postgres ENUMs are schema objects, not table-scoped, so
-`drop_table` left `signal_root` behind and the *next* upgrade died with `DuplicateObject`. Every fresh
-clone would have worked and every rebuild would have broken — the worst possible failure shape for a
-demo. Fixed and regression-guarded.
-
----
-
-## Current phase — 3: DATA — not started
-
-Real public datasets, ground-truth testbed, deep extraction.
-
-**Objectives**
-
-1. `engine/ingest/dnm_archives.py` and `kaggle_agora.py` normalising to `Post`/`Persona`; blocklist that
-   strips step-by-step content and logs the drop count.
-2. `engine/ingest/osint.py` — port v1's three adapters to Python, same shapes, same 20 s cache.
-3. `engine/ingest/chain.py` — mempool.space and Etherscan adapters with Postgres caching.
-4. `engine/testbed/generate.py` — fixed-seed synthetic ground truth with the four labelled cases
-   (multi-persona, rebrand, infra leak, decoy) and `labels.parquet`.
-5. `engine/extract/` — port `extractor.ts`, add PGP fingerprints via `pgpy`, onion v3, XMR, spaCy
-   `EntityRuler`, optional MuRIL for Hinglish, honest `source` badge.
-6. `/feed` streams real DATASET items; `/extract` mirrors `/api/analyze`.
-7. Tests: loaders on fixtures, extraction P/R on 30 hand-labelled sentences, testbed determinism.
-
-**Carried in from Phase 1 — must be addressed here**
-
-**FINDING-07** — Groq returns city names the gazetteer cannot resolve (`"jbp"` for Jabalpur), so
-`registerCities()` silently drops a correctly-identified in-zone mention. Phase 3 needs a normalisation
-layer between extraction and the gazetteer, and the METRICS extraction table must measure recall
-**after** normalisation.
+**Three findings recorded (DEC-018)** — measured on the real file before writing code: Agora has
+**no timestamps** (so the `temporal` root is testbed-only), **PGP in ~0.1% of rows** (so
+`identity_key` is testbed-driven), and **zero MP geography** (so the geofence stays a DEMO story).
+This maps onto the three-way toggle: DEMO carries the geofence, DATASET carries linkage and
+stylometry, the testbed carries every metric.
 
 ---
 
-## Next phase — 4: IDENTITY GRAPH
+## Current phase — 4: IDENTITY GRAPH — not started
 
 Splink blocking and Neo4j GDS resolution.
 
-**Prerequisites from Phase 3:** personas and posts loaded in Postgres with entities extracted; the
-`entities` table populated and keyed so personas can be blocked across markets.
+**Objectives**
+
+1. `engine/engines/graph.py` — load personas, entities, posts into Neo4j. Typed weighted edges:
+   `SIGNED_WITH` 0.95, `PAID_TO` 0.80, `CONTACT` 0.70, `VOUCHES_FOR` 0.30, `MENTIONS` 0.20,
+   `LOCATED`. Idempotent `MERGE`.
+2. `engine/engines/linkage.py` — Splink on DuckDB. Blocking on shared PGP / wallet / email /
+   telegram / onion, Jaro-Winkler handle >= 0.9, same category with overlapping window. EM-trained
+   m/u exported to METRICS.
+3. GDS: WCC over hard identifiers → `Actor` super-nodes; Louvain; FastRP 128-d into pgvector.
+4. Endpoints `/graph/actor/{id}`, `/graph/candidates?persona=`, `/graph/search?q=`.
+5. APScheduler graph reload; `/sources` reports graph freshness.
+6. Tests: multi-persona → one WCC; **decoy → different WCC**; Splink recall >= 0.9 at 0.5.
+
+**Note carried from Phase 3:** the rebrand pair shares a wallet *lineage edge*, not an address,
+so WCC over hard identifiers must **not** merge it — that pair is reserved for Phase 5/7 to solve
+on style and timing. The decoy must likewise stay separate. Both are the real tests of objective 6.
+
+---
+
+## Next phase — 5: STYLOMETRY & BEHAVIOUR
+
+Authorship verification, counter-deception, rebrand detection.
+
+**Prerequisites from Phase 4:** personas resolved into actors with per-persona post corpora
+available, and the decoy and rebrand pairs surfaced as candidates for scoring.
 
 ---
 
@@ -90,7 +94,7 @@ Splink blocking and Neo4j GDS resolution.
 | B-01 | Docker not installed | Phase 2 obj 2, 4 | **RESOLVED** 30 Aug — Docker 29.7.2, both images arm64-native, cold start 24 s |
 | B-02 | Foundry (`forge`, `anvil`) not installed | Phase 8 | Open — not yet needed, install before Phase 8 |
 | B-03 | Shodan free tier may not include host-lookup API credits | Phase 6 obj 1 | Open — **validate in the first hour of Phase 6**. Mitigation already in the design: crt.sh carries the 0.95/0.85 rules and Shodan degrades to cache-only. Not a free/open-source rule violation, just an unverified capacity assumption. |
-| B-04 | Gwern DNM Archives + Kaggle Agora need manual download (free accounts) | Phase 3 | Open — by design. 1,000-row fixtures are committed so the demo never depends on the full download. |
+| B-04 | Gwern DNM Archives manual download | Phase 3 | **Kaggle Agora RESOLVED** 31 Aug — 109,689 rows loaded, 1,000-row real fixture committed. Gwern deferred per DEC-019; it is the only source with timestamps, so it stays a Phase 10 nice-to-have, not a demo dependency. |
 
 No blocker has been resolved by substituting a paid service.
 
@@ -106,7 +110,7 @@ full tables.
 | Precision / Recall / F1 @ τ | pending — Phase 7 |
 | False-merge rate @ τ(α=0.05) | pending — Phase 7 |
 | Brier / ECE | pending — Phase 7 |
-| Extraction P/R | pending — Phase 3 |
+| **Extraction P/R** | **EN 1.000 / HI 1.000 recall** (regression guard; 7/10 on unseen forms, 0 false positives) |
 | Splink P/R | pending — Phase 4 |
 | **Fusion worked example** | **0.8395 → 0.84** (verified Phase 1) |
 | **Naive noisy-OR baseline** | **0.9991 → 0.999** (verified Phase 1) |
@@ -120,7 +124,7 @@ Which of the seven `docs/DEMO.md` steps run end-to-end today.
 | Step | State |
 |---|---|
 | 1. Geofence on the map (DEMO mode) | **works** — v1, breaches at ~6 s and ~15 s |
-| 2a. DATASET mode wiring | **works** — toggle, proxy and honest empty state; data lands in Phase 3 |
+| 2. DATASET mode, real listings | **works** — 1,000 real Agora listings with extracted entities |
 | 2. DATASET mode, real listings | not built — Phase 2 wiring, Phase 3 data |
 | 3. Actor graph, decoy separation | not built — Phase 4 |
 | 4. Evidence trail, 0.84 vs 0.999 | not built — Phase 7 (maths verified Phase 1) |
