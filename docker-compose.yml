@@ -1,0 +1,76 @@
+# PRAHARI v2 - local infrastructure.
+# Everything here is free and open source: Neo4j Community with the free GDS
+# plugin, and PostgreSQL with pgvector. No licences, no cloud, no keys.
+#
+#   docker compose up -d      start
+#   docker compose ps         health
+#   docker compose down       stop, keep data
+#   docker compose down -v    stop, wipe data
+#
+# Memory is pinned deliberately. Docker Desktop on this machine allocates
+# ~8 GB total; Neo4j's default heap sizing is greedy and will starve Postgres
+# if left to negotiate. See docs/DECISIONS.md DEC-014.
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: prahari-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: prahari
+      POSTGRES_PASSWORD: prahari
+      POSTGRES_DB: prahari
+      # Deterministic collation so index ordering matches across machines.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prahari -d prahari"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+  neo4j:
+    image: neo4j:5-community
+    container_name: prahari-neo4j
+    restart: unless-stopped
+    environment:
+      NEO4J_AUTH: neo4j/prahari123
+      # Graph Data Science - free in Community. WCC, Louvain and FastRP (the
+      # three Phase 4 needs) are all available without an enterprise licence.
+      NEO4J_PLUGINS: '["graph-data-science"]'
+      NEO4J_dbms_security_procedures_unrestricted: "gds.*"
+      NEO4J_dbms_security_procedures_allowlist: "gds.*"
+      NEO4J_server_memory_heap_initial__size: "512m"
+      NEO4J_server_memory_heap_max__size: "1g"
+      NEO4J_server_memory_pagecache_size: "512m"
+    ports:
+      - "7474:7474" # HTTP browser
+      - "7687:7687" # Bolt
+    volumes:
+      - neo4jdata:/data
+      - neo4jlogs:/logs
+    healthcheck:
+      # cypher-shell proves Bolt is actually serving queries, not just that the
+      # port is bound - Neo4j binds well before it can answer.
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p prahari123 'RETURN 1' || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 18
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+
+volumes:
+  pgdata:
+  neo4jdata:
+  neo4jlogs:

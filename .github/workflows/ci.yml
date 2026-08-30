@@ -1,0 +1,121 @@
+name: CI
+
+# Added in Phase 2 per DEC-010. Phase 8 requires an end-to-end Anvil test "in
+# CI" and Phase 11 requires a "link to CI run", but no phase creates it -- so it
+# is created here, before anything depends on it.
+
+on:
+  push:
+    branches: [main, "phase/**"]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: web (vitest + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - name: Unit tests
+        run: npm test
+      - name: Production build
+        run: npm run build
+
+  engine:
+    name: engine (pytest + migrations)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: prahari
+          POSTGRES_PASSWORD: prahari
+          POSTGRES_DB: prahari
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U prahari -d prahari"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      DATABASE_URL: postgresql+psycopg://prahari:prahari@localhost:5432/prahari
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - name: Install (Python pinned per DEC-012)
+        working-directory: engine
+        run: |
+          uv venv --python 3.12
+          uv pip install -e ".[dev]"
+      - name: Migrations up / down / up
+        working-directory: engine
+        run: |
+          uv run alembic upgrade head
+          uv run alembic downgrade base
+          uv run alembic upgrade head
+      - name: Tests
+        working-directory: engine
+        run: uv run pytest -q
+
+  guardrails:
+    name: global rules
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Playbook global rule: no emoji anywhere.
+      - name: No emoji
+        run: |
+          if grep -rnP "[\x{1F300}-\x{1FAFF}]" \
+               --include='*.ts' --include='*.tsx' --include='*.py' \
+               --include='*.md' --include='*.css' --include='*.sol' . ; then
+            echo "::error::Emoji found (playbook global rule / DEC-002)"; exit 1
+          fi
+          echo "clean"
+
+      # DEC-002: no decorative glyph used as an icon in rendered UI. Arrows in
+      # comments and prose are permitted, so only web source is scanned.
+      - name: No decorative glyphs in rendered UI
+        run: |
+          if grep -rnP "[\x{2700}-\x{27BF}\x{2B00}-\x{2BFF}]|[✓✔✗✘⚠↳]" \
+               --include='*.tsx' web/components web/app ; then
+            echo "::error::Decorative glyph in rendered UI (DEC-002)"; exit 1
+          fi
+          echo "clean"
+
+      # Passivity rule: PRAHARI never connects to a hidden service.
+      - name: No outbound .onion
+        run: |
+          if grep -rnE "https?://[a-z2-7]{16,56}\.onion" \
+               --include='*.ts' --include='*.tsx' --include='*.py' . ; then
+            echo "::error::Outbound .onion reference (passivity rule)"; exit 1
+          fi
+          echo "clean"
+
+      # Secrets must never be committed. .env.local is gitignored; the example
+      # file must stay a placeholder.
+      - name: No committed secrets
+        run: |
+          if git grep -nE "gsk_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,}" -- \
+               ':!*.md' ':!.github/*' ; then
+            echo "::error::Possible API key committed"; exit 1
+          fi
+          if git ls-files --error-unmatch .env.local 2>/dev/null; then
+            echo "::error::.env.local is tracked"; exit 1
+          fi
+          echo "clean"
+
+      # The product has exactly one name.
+      - name: Product name is PRAHARI
+        run: |
+          if git grep -niE "\bANVESHAN\b" -- ':!docs/DECISIONS.md' ; then
+            echo "::error::Second product name found (DEC-001)"; exit 1
+          fi
+          echo "clean"

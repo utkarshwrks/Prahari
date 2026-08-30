@@ -41,6 +41,12 @@ export interface FocusTarget {
 
 export type LiveStatus = "idle" | "connecting" | "live" | "offline";
 
+/** Feed source. DEMO is synthetic, DATASET is the engine's real listings,
+ *  LIVE is public OSINT. Replaces v1's `demoMode` boolean (Phase 2 obj 6). */
+export type FeedMode = "DEMO" | "DATASET" | "LIVE";
+
+export const FEED_MODES: FeedMode[] = ["DEMO", "DATASET", "LIVE"];
+
 export type AlertStatus = "New" | "Acknowledged" | "Investigating" | "Closed";
 
 export interface AlertLogEntry {
@@ -65,10 +71,12 @@ export interface AlertLogEntry {
 interface IntelState {
   intercepts: Intercept[];
   running: boolean;
-  demoMode: boolean;
+  mode: FeedMode;
   muted: boolean;
   toastsEnabled: boolean;
   liveStatus: LiveStatus;
+  /** Why DATASET mode is empty, when it is. Null means no problem to report. */
+  datasetNotice: string | null;
   focusTarget: FocusTarget | null;
 
   totalIntercepts: number;
@@ -87,7 +95,7 @@ interface IntelState {
 
   start: () => void;
   stop: () => void;
-  setDemoMode: (on: boolean) => void;
+  setMode: (mode: FeedMode) => void;
   toggleMute: () => void;
   toggleToasts: () => void;
   focusOnCity: (city: string) => void;
@@ -111,6 +119,7 @@ let focusSeq = 0;
 const walletSet = new Set<string>();
 const handleSet = new Set<string>();
 const liveSeen = new Set<string>(); // dedup for LIVE OSINT items
+const datasetSeen = new Set<string>(); // dedup for DATASET engine items
 
 function computeThreat(
   lastBreachAt: number | null,
@@ -125,10 +134,11 @@ function computeThreat(
 export const useIntel = create<IntelState>((set, get) => ({
   intercepts: [],
   running: false,
-  demoMode: true,
+  mode: "DEMO",
   muted: true,
   toastsEnabled: true,
   liveStatus: "idle",
+  datasetNotice: null,
   focusTarget: null,
 
   totalIntercepts: 0,
@@ -315,14 +325,45 @@ export const useIntel = create<IntelState>((set, get) => ({
       }
     };
 
+    // DATASET mode: pull real listings from the engine through the server-side
+    // proxy. The engine being down is a normal state, not an error - the feed
+    // simply stays empty and the badge says why.
+    const fetchDatasetBatch = async () => {
+      try {
+        const res = await fetch("/api/engine/feed?limit=20");
+        const data = await res.json();
+        if (data?.engine === "offline") {
+          set({ datasetNotice: data.detail ?? "Engine offline.", liveStatus: "offline" });
+          return;
+        }
+        const items: Intercept[] = Array.isArray(data?.items) ? data.items : [];
+        let added = 0;
+        for (const it of items) {
+          if (datasetSeen.has(it.id)) continue;
+          datasetSeen.add(it.id);
+          get().ingest({ ...it, timestamp: Date.now() });
+          if (++added >= 4) break;
+        }
+        set({
+          liveStatus: "live",
+          datasetNotice: items.length === 0 ? (data?.detail ?? null) : null,
+        });
+      } catch {
+        set({ liveStatus: "offline", datasetNotice: "Engine unreachable." });
+      }
+    };
+
     const tick = async () => {
-      const demo = get().demoMode;
-      if (demo) {
+      const mode = get().mode;
+      if (mode === "DEMO") {
         get().ingest(generateIntercept());
+      } else if (mode === "DATASET") {
+        await fetchDatasetBatch();
       } else {
         await fetchLiveBatch();
       }
-      const delay = demo ? 900 + Math.random() * 600 : 9000 + Math.random() * 4000;
+      // Synthetic data streams fast; real sources are polled politely.
+      const delay = mode === "DEMO" ? 900 + Math.random() * 600 : 9000 + Math.random() * 4000;
       streamTimer = setTimeout(tick, delay);
     };
 
@@ -336,12 +377,12 @@ export const useIntel = create<IntelState>((set, get) => ({
     }, 1000);
 
     // DEMO MODE: guarantee two in-zone breaches early (~6s and ~15s).
-    if (get().demoMode) {
+    if (get().mode === "DEMO") {
       demoTimers.push(setTimeout(() => get().ingest(generateIntercept({ forceCity: "Jabalpur" })), 6000));
       demoTimers.push(setTimeout(() => get().ingest(generateIntercept({ forceCity: "Katni" })), 15000));
     }
 
-    set({ running: true, liveStatus: get().demoMode ? "idle" : "connecting" });
+    set({ running: true, liveStatus: get().mode === "DEMO" ? "idle" : "connecting" });
   },
 
   stop: () => {
@@ -354,13 +395,18 @@ export const useIntel = create<IntelState>((set, get) => ({
     set({ running: false, liveStatus: "idle" });
   },
 
-  setDemoMode: (on) => {
-    // Clear the live feed + map so a mode switch starts clean. Cumulative
-    // counters and the alert log (the record) are kept.
+  setMode: (mode) => {
+    // Identical semantics to v1's setDemoMode(): clear the feed and the map so
+    // the new source starts clean, but KEEP the cumulative counters and the
+    // alert log, because those are the record. The dedup Sets live outside
+    // zustand (INV-5) which is what makes the counters cumulative.
+    if (get().mode === mode) return;
     liveSeen.clear();
+    datasetSeen.clear();
     set({
-      demoMode: on,
-      liveStatus: on ? "idle" : "connecting",
+      mode,
+      liveStatus: mode === "DEMO" ? "idle" : "connecting",
+      datasetNotice: null,
       intercepts: [],
       cityHeat: {},
       lastPulse: null,

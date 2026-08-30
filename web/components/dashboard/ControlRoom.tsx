@@ -21,7 +21,8 @@ export default function ControlRoom() {
   const stop = useIntel((s) => s.stop);
   const total = useIntel((s) => s.totalIntercepts);
   const breaches = useIntel((s) => s.geofenceBreaches);
-  const demoMode = useIntel((s) => s.demoMode);
+  const mode = useIntel((s) => s.mode);
+  const datasetNotice = useIntel((s) => s.datasetNotice);
   const liveStatus = useIntel((s) => s.liveStatus);
 
   useEffect(() => {
@@ -53,17 +54,27 @@ export default function ControlRoom() {
             <div className="flex items-center gap-2">
               <span
                 className={`mono border px-1.5 py-0.5 text-[8px] uppercase tracking-wider ${
-                  demoMode
+                  mode === "DEMO" || liveStatus === "live"
                     ? "border-red/40 bg-red/10 text-red-bright"
-                    : liveStatus === "live"
-                      ? "border-red/40 bg-red/10 text-red-bright"
-                      : liveStatus === "offline"
-                        ? "border-border-2 text-muted-2"
-                        : "border-border-2 text-muted"
+                    : liveStatus === "offline"
+                      ? "border-border-2 text-muted-2"
+                      : "border-border-2 text-muted"
                 }`}
-                title={demoMode ? "Synthetic demo feed" : "Real public OSINT feed"}
+                title={
+                  mode === "DEMO"
+                    ? "Synthetic demo feed"
+                    : mode === "DATASET"
+                      ? (datasetNotice ?? "Real listings from the engine")
+                      : "Real public OSINT feed"
+                }
               >
-                {demoMode ? "● DEMO" : liveStatus === "live" ? "● LIVE OSINT" : liveStatus === "offline" ? "○ OFFLINE" : "◌ CONNECTING"}
+                {mode === "DEMO"
+                  ? "DEMO"
+                  : liveStatus === "offline"
+                    ? (mode === "DATASET" ? "ENGINE OFFLINE" : "OFFLINE")
+                    : liveStatus === "live"
+                      ? (mode === "DATASET" ? "DATASET" : "LIVE OSINT")
+                      : "CONNECTING"}
               </span>
               <span className="mono text-[10px] tracking-widest text-muted-2">{total} RX</span>
             </div>

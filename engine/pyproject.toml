@@ -1,0 +1,45 @@
+[project]
+name = "prahari-engine"
+version = "2.0.0"
+description = "PRAHARI v2 attribution engine - ingest, extract, four engines, fusion, audit."
+readme = "README.md"
+
+# Pinned per DEC-012. The build machine defaults to Python 3.14, for which
+# spaCy, PyTorch CPU and Splink do not reliably publish wheels. Do not widen
+# this without checking those three first.
+requires-python = ">=3.11,<3.13"
+
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "sqlalchemy>=2.0",
+    "alembic>=1.14",
+    "psycopg[binary]>=3.2",
+    "apscheduler>=3.10",
+    "httpx>=0.27",
+    "python-json-logger>=2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.7",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["engine"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

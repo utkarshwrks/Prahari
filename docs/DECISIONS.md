@@ -135,3 +135,43 @@ Phase 3 must add a normalisation/alias layer between extraction and the gazettee
 `jabalpore`, Devanagari `जबलपुर`, etc.), and the extraction P/R table in `docs/METRICS.md` must measure
 recall *after* normalisation, not before. Not fixed in Phase 1 — it is Phase 3 scope and needs the
 Hinglish lexicon that phase introduces.
+
+---
+
+## Phase 2 — Foundation
+
+### DEC-014 — Container memory is pinned, not negotiated.
+Docker Desktop on the build machine allocates ~8.3 GB. Neo4j's default heap sizing inspects host memory
+and claims aggressively, which starves Postgres and, later, CPU inference in Phase 5. `docker-compose.yml`
+therefore pins Neo4j to 1 GB heap + 512 MB pagecache (2 GB container limit) and Postgres to 1 GB.
+
+Verified sufficient for the testbed scale (thousands of personas, not millions). If Phase 5 hits memory
+pressure, raise Docker Desktop to 12 GB rather than unpinning these — unpinned Neo4j is what breaks first.
+
+### DEC-015 — Neo4j healthcheck uses `cypher-shell`, not a port probe.
+Neo4j binds 7687 well before it can answer queries. A TCP healthcheck reports healthy while the first
+real query still fails, which would make `npm run demo` flaky in exactly the way Phase 10 must not be.
+The healthcheck runs `RETURN 1` over Bolt so "healthy" means "answering queries".
+
+Measured cold start with this healthcheck: **24 s** for both services (playbook budget: 60 s).
+
+### DEC-016 — Postgres ENUMs are created and dropped explicitly in migrations.
+Found by the Phase 2 up/down/up test, not in review. SQLAlchemy emits an inline `CREATE TYPE` the first
+time an `Enum` column is used and never drops it. `op.drop_table()` therefore leaves `signal_root`
+behind, and the *next* `alembic upgrade` fails with `DuplicateObject: type "signal_root" already exists`.
+
+Every fresh clone would have worked and every rebuild would have broken — the worst failure shape for a
+demo. The initial migration now creates the type explicitly with `checkfirst=True`, declares the column
+with `create_type=False`, and drops the type in `downgrade()`.
+
+Verified: `up -> 10 tables / down -> 0 tables, 0 enums / up -> 10 tables`, sources reseeded both times.
+Regression-guarded by `engine/tests/test_migrations.py::test_up_down_up_is_clean`.
+
+### DEC-017 — `/health` returns 200 when Postgres is down.
+"The engine is up" and "the database is up" are different facts, and the workbench must tell them apart
+to degrade honestly: engine-unreachable means DATASET mode shows "engine offline", whereas
+database-unreachable means the engine can still serve `/version`, `/feed` and a fallback `/sources`.
+Collapsing both into a 503 would make the two indistinguishable from the browser.
+
+`/health` therefore stays 200 and carries the truth in `checks.database`. A non-200 from `/health` means
+the process itself is gone.
