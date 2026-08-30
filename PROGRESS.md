@@ -4,74 +4,85 @@ The single source of truth for project status. Updated at the end of every phase
 
 ---
 
-## Last phase — 5: STYLOMETRY & BEHAVIOUR — 31 August 2026 — automated layer PASS
+## Last phase — 6: INFRASTRUCTURE FINGERPRINTING — 31 August 2026 — automated layer PASS
 
-The signals Phase 4 could not reach.
+Passive onion → clearnet matching. Nothing here connects to Tor or scans a host.
 
 **Shipped**
 
-- **Stylometry** — TF-IDF char 3-5 grams, 150 function words, TTR, punctuation habits, and **Hinglish
-  markers** (romanised-Hindi ratio, Devanagari, honorifics).
-- **Behaviour** — 24-bin hour histogram in **IST**, weekday, inter-post intervals; Jensen-Shannon → `s_time`.
-- **Counter-deception** — bio-level mimicry detection and a **relative** LLM-rewrite detector.
-- **Rebrand detection** — change-point plus death/birth gap, style threshold and wallet lineage.
-- **Verifier** — logistic model over 8 pairwise features (Siamese cut, DEC-023).
-- **Endpoints** — `/style/compare`, `/style/profile`, `/behaviour/compare`, `/behaviour/profile`,
-  `/compare`, `/rebrand/candidates`.
+- **`engine/engines/infra.py`** — Certificate Transparency with failover, Shodan InternetDB, favicon
+  mmh3, header-order fingerprint, JARM guarded behind explicit ownership.
+- **Rule table** — all six playbook strengths, with **max** aggregation, never a sum.
+- **Testbed infra-leak** — resolves to the planted domain at **0.95** with five evidence lines, from
+  planted metadata, so the demo never depends on a third-party index being up.
+- **Endpoints** — `/infra/pivot`, `/infra/certificates`, `/infra/host`, `/infra/sources`.
+- **Passivity enforcement** — `assert_not_onion()` on every outbound URL, plus a network-layer test
+  that spies on `socket.getaddrinfo` and asserts no `.onion` resolution is ever attempted.
 
-**The Phase 5 inversion, which is the point of the phase**
+**Two blockers resolved by measurement, both in the project's favour**
 
-| Case | Phase 4 (linkage) | Phase 5 (style) |
-|---|---|---|
-| **Decoy** | correctly separate (no shared identifier) | raw similarity **0.827** — but capped to **0.200** by `mimicry_suspected` |
-| **Rebrand** | correctly separate (distinct wallets) | **0.843**, detected rank 1 with correct dates and lineage |
+1. **B-03 closed, and better than assumed (DEC-026).** Shodan needs **no key at all**:
+   `internetdb.shodan.io` is free and unauthenticated and returns ports, hostnames, CPEs, tags and
+   vulns. `SHODAN_API_KEY` is off the critical path entirely — one fewer key, one fewer account for an
+   on-prem deployment.
+2. **crt.sh was DOWN — 0/5 attempts, all HTTP 502 (DEC-027).** It carries the 0.95 and 0.85 rules.
+   certspotter is also free and keyless, returned 100 certificates throughout, and is now primary;
+   crt.sh is automatic failover. `/infra/sources` names which source actually answered.
 
-Both are invisible to record linkage. Style separates them in the right direction.
+**Results**
 
-**Tests:** 139 engine (was 114), 56 web, build clean.
+| Check | Value |
+|---|---|
+| Testbed leak → planted domain | **0.95**, 5 evidence lines |
+| Decoy host, shared nginx banner only | **0.40** |
+| Live CT on a real public domain | **100 certificates** via certspotter |
+| Shodan InternetDB, no key | ports + hostnames returned |
+| Cache hit rate on repeat | 0.50 |
+| **Outbound `.onion` requests** | **0** |
 
-**Three findings, each caught by measurement rather than review**
-
-1. **DEC-025 — mimicry was measured on the wrong text.** The playbook says "Jaccard on **bio**
-   shingles"; applied to the full post corpus, the decoy's copied bio is one line in thirteen and
-   diluted away. The decoy scored **0.914 — higher than genuine pairs — with no flag**. The single
-   most important negative case passed as the strongest positive.
-2. **DEC-024 — the LLM-rewrite threshold was meaningless.** Burstiness on the testbed ranges
-   0.102-0.385; an absolute cutoff of 0.25 fired on **206 of 244 personas (84%)**. Now relative to the
-   corpus's 5th percentile, and it **abstains** with no reference: 4.5% false positives, still catches
-   genuinely flattened text.
-3. **DEC-023 — Siamese model cut, with reasons beyond the time budget.** 244 personas of templated
-   text would train a char-CNN to memorise the generator. The logistic fallback publishes its
-   coefficients, and `hinglish_diff` came out the second-strongest feature.
+**Tests:** 165 engine (was 139), 57 web, build clean.
 
 ---
 
-## Current phase — 6: INFRASTRUCTURE FINGERPRINTING — not started
+## Current phase — 7: EVIDENCE FUSION, CALIBRATION, CONFORMAL GUARANTEE — not started
 
-Passive onion → clearnet matching. **Passive only: never connect to a `.onion`, never scan a host.**
+**The phase that decides whether the project wins.** All five signal roots now exist.
 
 **Objectives**
 
-1. `engine/engines/infra.py` — crt.sh (no key), Shodan (free key, cache-only without), JARM against
-   testbed-controlled hosts only, favicon mmh3, header-order fingerprint.
-2. Matching rules and strengths: cert SHA-256 reused 0.95 · CN/SAN names a clearnet domain 0.85 ·
-   exposed `server-status` 0.90 · favicon hash 0.75 · JARM + banner 0.60 · banner alone 0.40.
-3. Testbed infra-leak resolves from planted metadata, so the demo never needs a live Shodan call.
-4. `/infra/pivot?onion=`, `/infra/sources` with cache hit rate.
-5. Tests including **a network-layer assertion that no outbound request host ends in `.onion`**.
+1. `engine/fusion/score.py` — `LR = s/(1-s)`; group by root; **max LR per root**; `Π LR_root^r`;
+   prior odds 1:10 blocked / 1:10,000 otherwise; must-not-link caps.
+2. Unit test reproducing **0.84** from the deck example and **0.999** from the naive baseline —
+   which is **noisy-OR**, `1 − Π(1−sᵢ)`, not an LR product (DEC-003, settled in Phase 1).
+3. `calibrate.py` — isotonic regression, Brier, ECE, reliability-diagram JSON.
+4. Split-conformal: threshold τ for risk budget α, `/fusion/threshold?alpha=`.
+5. `eval.py` — precision, recall, F1, false-merge at τ, Brier, ECE; writes METRICS.
+6. `POST /fusion/feedback` — analyst verdict updates negatives and re-scores.
+7. `/fusion/pair/{id}`, `/fusion/actor/{id}`.
 
-**Blocker to settle in the first hour:** B-03 — Shodan free accounts may not include host-lookup API
-credits. Validate before building on it; crt.sh alone carries the 0.95 and 0.85 rules.
+**Signals available to fuse**
+
+| Root | Source | Status |
+|---|---|---|
+| `identity_key` | Splink PGP/email match | Phase 4 |
+| `financial` | shared wallet, lineage edges | Phase 4 |
+| `infra` | onion → clearnet pivot | Phase 6 |
+| `linguistic` | `s_style` with mimicry caps | Phase 5 |
+| `temporal` | `s_time`, rebrand candidates | Phase 5 |
+| `social` | handle similarity, vouches | Phase 4 |
+
+**The two cases fusion must get right:** the **decoy** must land ≤ 0.30 with its negative listed, and
+the **rebrand** pair must clear threshold on linguistic + temporal + financial-lineage alone, since
+neither has a hard identifier.
 
 ---
 
-## Next phase — 7: EVIDENCE FUSION (the USP)
+## Next phase — 8: IMMUTABLE AUDIT
 
-Root-cause collapse, reliability dampening, isotonic calibration, conformal guarantee.
+Hash chain, Ed25519 signatures, Merkle roots, Sepolia anchoring with Anvil fallback.
 
-**Prerequisites from Phase 6:** infra signals written with root `infra` and provenance, joining the
-style (`linguistic`), behaviour (`temporal`), linkage (`identity_key`, `social`) and chain
-(`financial`) signals already produced.
+**Prerequisites from Phase 7:** the canonical JSON serialisation of `PairScore`, and the list of
+analyst actions that must be hashed.
 
 ---
 
@@ -81,8 +92,10 @@ style (`linguistic`), behaviour (`temporal`), linkage (`identity_key`, `social`)
 |---|---|---|---|
 | B-01 | Docker not installed | Phase 2 obj 2, 4 | **RESOLVED** 30 Aug — Docker 29.7.2, both images arm64-native, cold start 24 s |
 | B-02 | Foundry (`forge`, `anvil`) not installed | Phase 8 | Open — not yet needed, install before Phase 8 |
-| B-03 | Shodan free tier may not include host-lookup API credits | Phase 6 obj 1 | Open — **validate in the first hour of Phase 6**. Mitigation already in the design: crt.sh carries the 0.95/0.85 rules and Shodan degrades to cache-only. Not a free/open-source rule violation, just an unverified capacity assumption. |
+| B-03 | Shodan free tier credits | Phase 6 | **RESOLVED** 31 Aug — no key needed at all. `internetdb.shodan.io` is free and unauthenticated (DEC-026). |
 | B-04 | Gwern DNM Archives manual download | Phase 3 | **Kaggle Agora RESOLVED** 31 Aug — 109,689 rows loaded, 1,000-row real fixture committed. Gwern deferred per DEC-019; it is the only source with timestamps, so it stays a Phase 10 nice-to-have, not a demo dependency. |
+
+| B-05 | crt.sh returned HTTP 502 on 5/5 attempts | Phase 6 | **MITIGATED** 31 Aug — certspotter (also free, also keyless) is now primary, crt.sh is failover (DEC-027). Not resolved upstream; the service is simply unreliable. |
 
 No blocker has been resolved by substituting a paid service.
 

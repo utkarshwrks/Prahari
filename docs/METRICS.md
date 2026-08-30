@@ -237,17 +237,29 @@ Burstiness across 244 personas: min 0.102, median 0.205, max 0.385.
 
 | Rule | Strength | Fired on testbed |
 |---|---|---|
-| Cert SHA-256 reused on clearnet | 0.95 | |
-| CN/SAN names a clearnet domain | 0.85 | |
-| Exposed `server-status` names a vhost | 0.90 | |
-| Favicon mmh3 hash match | 0.75 | |
-| JARM + banner match | 0.60 | |
-| Banner alone | 0.40 | |
+| Cert SHA-256 reused on clearnet | 0.95 | **yes** |
+| Exposed `server-status` names a vhost | 0.90 | **yes** |
+| CN/SAN names a clearnet domain | 0.85 | **yes** |
+| Favicon mmh3 hash match | 0.75 | **yes** |
+| JARM + banner match | 0.60 | no (JARM refused — DEC-028) |
+| Banner alone | 0.40 | **yes** (on the decoy host) |
 
 | Metric | Value |
 |---|---|
-| Cache hit rate | |
-| Outbound requests to `.onion` | **must be 0** |
+| Testbed infra-leak resolves | **yes**, strength **0.95**, 5 evidence lines |
+| Decoy host (shared nginx banner only) | **0.40** — same stack is not same operator |
+| Strength aggregation | **max**, never a sum |
+| Cache hit rate (repeat pivot) | **0.50** |
+| **Outbound requests to `.onion`** | **0** — enforced by `assert_not_onion()` and a network-layer test |
+
+### Live source validation
+
+| Source | Key | Status when measured |
+|---|---|---|
+| certspotter | none | **working** — 100 certificates for `iitb.ac.in`, primary |
+| crt.sh | none | **DOWN — 0/5 attempts, HTTP 502** (DEC-027), demoted to failover |
+| Shodan InternetDB | **none needed** | **working** — ports, hostnames, CPEs (DEC-026, B-03 resolved) |
+| JARM | none | refused against hosts we do not control (DEC-028) |
 
 ---
 
