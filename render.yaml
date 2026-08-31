@@ -1,0 +1,22 @@
+# Render blueprint — free-tier Docker web service for the PRAHARI engine.
+# Deploy: render.com -> New -> Blueprint -> pick this repo. Free plan sleeps
+# after 15 min idle and cold-starts in ~30-60s; that is fine for a demo.
+services:
+  - type: web
+    name: prahari-engine
+    runtime: docker
+    repo: https://github.com/utkarshwrks/Prahari
+    plan: free
+    dockerfilePath: ./engine/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: RPC_URL
+        value: https://rpc-amoy.polygon.technology
+      - key: CHAIN_ID
+        value: "80002"
+      - key: CORS_ORIGINS
+        value: "*"

@@ -1,0 +1,10 @@
+**/.venv
+**/node_modules
+**/.next
+**/.git
+**/__pycache__
+**/.pytest_cache
+.secrets
+web
+anchor/lib
+*.log
