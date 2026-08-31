@@ -63,6 +63,10 @@ export default function Header() {
       </div>
 
       <div className="flex items-center gap-3">
+        <a href="/sangam" title="Sangam — WHO x WHERE map"
+          className="mono hidden items-center gap-1 border border-[var(--border-2)] px-2 py-1 text-[9px] uppercase tracking-[0.14em] text-[var(--muted)] transition hover:border-[var(--accent-dim)] hover:text-[var(--c-high)] sm:inline-flex">
+          Sangam
+        </a>
         <span className="mono hidden text-[10px] text-[var(--muted-2)] sm:inline">
           {session?.user?.name ?? session?.user?.email ?? "analyst"}
         </span>
