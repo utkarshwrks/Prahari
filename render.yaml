@@ -3,9 +3,10 @@
 # after 15 min idle and cold-starts in ~30-60s; that is fine for a demo.
 services:
   - type: web
-    name: prahari-engine
+    name: prahari-v2-engine
     runtime: docker
     repo: https://github.com/utkarshwrks/Prahari
+    branch: v2-rebuild        # deploy v2 ONLY — v1 on main is never touched
     plan: free
     dockerfilePath: ./engine/Dockerfile
     dockerContext: .

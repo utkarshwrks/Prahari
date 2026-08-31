@@ -5,6 +5,17 @@ Everything needed to put PRAHARI online for **free**: the Next.js frontend on
 **Polygon Amoy** (a zero-cost testnet). Three of these steps need *your* accounts
 and a faucet click — those are marked **[you]**. Everything else is already wired.
 
+> ### v1 stays in production — v2 deploys separately
+> The old v1 lives on the **`main`** branch and is left completely untouched.
+> Everything here deploys **v2 from the `v2-rebuild` branch as NEW, separate
+> projects** — a new Vercel project and a new Render service — so the two run
+> side by side and nothing about v1 changes.
+> - **Render:** `render.yaml` is pinned to `branch: v2-rebuild` and named
+>   `prahari-v2-engine`, so a Blueprint deploy only ever builds v2.
+> - **Vercel:** create a **new** project for v2 and set its **Production Branch**
+>   to `v2-rebuild` (Settings → Git → Production Branch). Do not reuse the v1
+>   project.
+
 ---
 
 ## 0. What is already prepared (in this repo)
@@ -27,11 +38,11 @@ The remote is already `github.com/utkarshwrks/Prahari`. From the repo root:
 
 ```bash
 git add -A && git commit -m "deploy: configs + docs"
-git push origin v2-rebuild           # or merge into main first
+git push origin v2-rebuild           # push v2 ONLY — never merge into main
 ```
 
-Vercel and Render both deploy from a branch — `v2-rebuild` is fine, or merge it
-to `main` and deploy from there.
+Both Vercel and Render deploy v2 from the **`v2-rebuild`** branch. Leave `main`
+(v1) alone.
 
 ---
 
