@@ -19,7 +19,7 @@ from ..testbed.generate import generate
 # certificate. This is the single most common real-world onion deanonymisation
 # -- an operator terminates TLS with the same cert on both, and the CA
 # publishes it to a public log for anyone to read.
-LEAK_DOMAIN = "vendor-shop-mirror.test"
+LEAK_DOMAIN = "example.com"  # RFC 2606 reserved: real+resolvable, defames no one
 
 
 @lru_cache(maxsize=1)

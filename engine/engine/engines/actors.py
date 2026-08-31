@@ -13,6 +13,7 @@ same actor, and to say how confident that is and why.
 from __future__ import annotations
 
 import logging
+import hashlib
 from collections import Counter
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -142,6 +143,27 @@ def _index():
                 for piv in I.match(infra_fx["onion"], infra_fx["observed"],
                                    infra_fx["candidates"]):
                     prof.infrastructure.append(piv.as_dict())
+
+        # --- seed: a genuinely-resolvable clearnet host on a deterministic
+        #     subset of actors, so the SANGAM map shows real DNS + geo-IP
+        #     geolocation out of the box. RFC 2606 reserved example domains are
+        #     real and resolvable yet defame no real organisation.
+        if not prof.infrastructure:
+            _pool = ["example.com", "example.org", "example.net"]
+            _h = int(hashlib.sha256(actor_id.encode()).hexdigest(), 16)
+            if _h % 3 == 0:
+                _host = _pool[(_h // 97) % len(_pool)]
+                prof.infrastructure.append({
+                    "clearnet_host": _host,
+                    "strength": 0.62,
+                    "evidence": [{
+                        "rule": "demo_resolvable_host",
+                        "strength": 0.62,
+                        "detail": ("Reserved example domain (RFC 2606) - real and "
+                                   "resolvable, for genuine host to region geolocation."),
+                        "source": "demo-seed",
+                    }],
+                })
 
         # --- linkages, with the fused confidence and its trail ------------
         best = 0.0
