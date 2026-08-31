@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import logging
 import hashlib
+import os
+import pickle
 from collections import Counter
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -79,9 +81,8 @@ def _iso(v: str | None) -> str | None:
     return v[:19] if v else None
 
 
-@lru_cache(maxsize=1)
-def _index():
-    """Build actor profiles once per process from the real engines."""
+def _build():
+    """Build actor profiles from the real engines (heavy; cached to disk by _index)."""
     from ..fusion import eval as E
     from ..testbed.generate import generate
     from .infra_testbed import infra_fixture
@@ -206,6 +207,30 @@ def _index():
         prof.last_scan = datetime.now(timezone.utc).isoformat(timespec="seconds")
         profiles[actor_id] = prof
 
+    return profiles
+
+
+_CACHE_PATH = os.path.join(os.path.dirname(__file__), "actors_index.pkl")
+
+
+@lru_cache(maxsize=1)
+def _index():
+    """Actor profiles, loaded from a precomputed disk cache when present so a
+    CPU/memory-constrained free-tier instance never rebuilds them live (which
+    times out). The corpus is deterministic, so the cache equals a fresh build.
+    """
+    if os.path.exists(_CACHE_PATH):
+        try:
+            with open(_CACHE_PATH, "rb") as fh:
+                return pickle.load(fh)
+        except Exception:  # noqa: BLE001
+            pass
+    profiles = _build()
+    try:
+        with open(_CACHE_PATH, "wb") as fh:
+            pickle.dump(profiles, fh)
+    except Exception:  # noqa: BLE001
+        pass
     return profiles
 
 
