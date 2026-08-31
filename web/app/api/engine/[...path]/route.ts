@@ -8,7 +8,10 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-const ENGINE_URL = process.env.ENGINE_URL ?? "http://localhost:8000";
+const RAW_ENGINE_URL = process.env.ENGINE_URL ?? "http://localhost:8000";
+// Render's fromService wiring provides a bare host (no scheme); normalise it so
+// the proxy always has a valid absolute base URL.
+const ENGINE_URL = /^https?:\/\//.test(RAW_ENGINE_URL) ? RAW_ENGINE_URL : `https://${RAW_ENGINE_URL}`;
 
 // Fusion and audit routes do real computation. A cold first call took ~20s and
 // an 8s ceiling reported it as "engine offline" on a healthy engine.
