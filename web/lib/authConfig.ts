@@ -65,7 +65,10 @@ export const SIGNIN_PAGE = "/login";
  * repository, which is correct for a pitch and indefensible for a deployment
  * holding investigative data.
  */
-export const DEMO_ACCOUNT_ENABLED = !IS_PRODUCTION;
+// Off in production by design (the demo password is public). A deliberate
+// demo/hackathon deployment can opt back in with ENABLE_DEMO_ACCOUNT=1.
+export const DEMO_ACCOUNT_ENABLED =
+  !IS_PRODUCTION || process.env.ENABLE_DEMO_ACCOUNT === "1";
 
 /** Roles. `officer` may seal and verify; `analyst` may investigate. */
 export type Role = "officer" | "analyst";
