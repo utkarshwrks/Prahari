@@ -19,7 +19,7 @@ from fastapi.responses import JSONResponse
 from starlette.requests import Request
 
 from .logging_config import configure_logging
-from .routers import (actors, audit, extract, feed, fusion, graph, health, infra,
+from .routers import (actors, audit, extract, feed, fusion, geo, graph, health, infra,
                       sources, style, tor)
 from .routers import chainflow as chainflow_router
 from .scheduler import start_scheduler, stop_scheduler
@@ -105,6 +105,7 @@ def create_app() -> FastAPI:
     app.include_router(graph.router)
     app.include_router(style.router)
     app.include_router(infra.router)
+    app.include_router(geo.router)
     app.include_router(fusion.router)
     app.include_router(audit.router)
     app.include_router(actors.router)

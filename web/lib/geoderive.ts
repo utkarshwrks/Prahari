@@ -20,6 +20,13 @@ export interface GeoNode {
   lng: number;
   detail: string;
   inferred: boolean;
+  // populated when a host is genuinely resolved via DNS + geo-IP
+  ip?: string;
+  city?: string | null;
+  country?: string | null;
+  flag?: string | null;
+  asn?: number | null;
+  org?: string | null;
 }
 
 // Known market hosting regions (approx), so the common cases look real.

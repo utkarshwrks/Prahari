@@ -53,6 +53,7 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text }),
     }),
+  geoHost: (host: string) => call<GeoHost>(`geo/host?host=${encodeURIComponent(host)}`),
 };
 
 // ---- shapes ---------------------------------------------------------------
@@ -194,4 +195,11 @@ export interface ExtractResult {
   ok: boolean; source: string;
   entities: Record<string, string[]>;
   unresolved_locations: number;
+}
+
+export interface GeoHost {
+  ok: boolean; host: string; ip?: string; resolved: boolean;
+  lat?: number; lng?: number; city?: string | null; region?: string | null;
+  country?: string | null; country_code?: string | null; flag?: string | null;
+  asn?: number | null; org?: string | null; detail?: string;
 }
