@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import pickle
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -46,8 +48,7 @@ def _split(n: int, seed: int = SEED) -> tuple[list[int], list[int]]:
     return sorted(idx[:cut]), sorted(idx[cut:])
 
 
-@lru_cache(maxsize=1)
-def build_signals() -> Dataset:
+def _build_signals() -> Dataset:
     """Assemble Signals for every labelled testbed pair from the real engines."""
     from ..engines import behaviour as B
     from ..engines import linkage as L
@@ -146,6 +147,29 @@ def build_signals() -> Dataset:
         labels.append(1 if lab.same_actor else 0)
 
     return Dataset(ids, scores, labels, {i: s for i, s in zip(ids, scores)})
+
+
+_SIGNALS_CACHE = os.path.join(os.path.dirname(__file__), "signals_cache.pkl")
+
+
+@lru_cache(maxsize=1)
+def build_signals() -> Dataset:
+    """The fusion dataset, loaded from a precomputed disk cache when present so a
+    CPU-constrained free-tier instance never rebuilds it live (which times out on
+    the ledger and fusion endpoints). Deterministic, so the cache is exact."""
+    if os.path.exists(_SIGNALS_CACHE):
+        try:
+            with open(_SIGNALS_CACHE, "rb") as fh:
+                return pickle.load(fh)
+        except Exception:  # noqa: BLE001
+            pass
+    ds = _build_signals()
+    try:
+        with open(_SIGNALS_CACHE, "wb") as fh:
+            pickle.dump(ds, fh)
+    except Exception:  # noqa: BLE001
+        pass
+    return ds
 
 
 def evaluate(alpha: float = 0.05) -> dict:
