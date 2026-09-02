@@ -13,7 +13,11 @@ what to revert if a phase fails.
 
 ## Phase 0 — Baseline lock
 
-**Status: BLOCKED. The baseline is red, and Phase 1 does not start against it.**
+**Status: COMPLETE, after Phase 0b closed the red baseline it found.**
+
+The baseline was red when first measured. Phase 0b (below) restored the safety net; the gate is now
+green and Phase 1 may start. The findings below are left as written — the record of what the tree
+actually looked like is the point.
 
 ### What was done
 
@@ -93,3 +97,68 @@ git checkout v2-rebuild && git branch -D feat/v2.1-workspace
 
 Files added: `web/lib/features.ts`, `web/e2e/baseline-shots.mjs`, `web/e2e/__baseline__/*.png`,
 `docs/UPGRADE_V2.1.md`. Files changed: `docs/TESTLOG.md` (append only). Files removed: **NONE**.
+
+---
+
+## Phase 0b — The safety net, restored
+
+**Status: COMPLETE. The Phase 0 gate is green.**
+
+Not in the original playbook. Phase 0 measured a red baseline and this phase closes it, because every
+later phase's gate is "`npm test` and `journey.mjs` green or roll back" and neither command could fail
+for any reason a phase change would cause.
+
+**No product code changed.** The only edit outside tests, config and docs is a comment block plus one
+`eslint-disable-next-line` in `app/layout.tsx`. Build output is byte-identical to the Phase 0 baseline.
+
+| Check | Phase 0 | Phase 0b |
+|---|---|---|
+| `npm test` | 0 test files, exit 1 | **144 passed**, 10 files |
+| `npm run lint` | interactive prompt, exit 1 | **clean** |
+| `npm run build` | clean | clean, identical route sizes |
+| `uv run pytest -q` | 239 passed, 17 skipped | 239 passed, 17 skipped |
+| `node web/e2e/journey.mjs` | harness error at check 1 | **35/35 passed** |
+| `forge test` | not run | not run — stated condition |
+
+**418 green** (144 web · 239 engine · 35 e2e). Full breakdown in `docs/TESTLOG.md`.
+
+### What was built
+
+1. **`web/__tests__/` rebuilt** — ten files, weighted towards the invariants that had no assertion at
+   all: INV-1, INV-2, INV-5, INV-6, INV-7, INV-8, DEC-042, DEC-046, DEC-051. Not a restore of the
+   deleted v1 files; new coverage for what ships today.
+2. **`web/vitest.config.ts` fixed** — its two `environmentMatchGlobs` named v1 files that no longer
+   existed.
+3. **`web/e2e/journey.mjs` rewritten for v2** — 35 checks green, up from 25 of which none ran. The
+   four v1 checks with no v2 equivalent print as GAPS on every run rather than being dropped.
+4. **ESLint configured** (`.eslintrc.js`) — `eslint-config-next`, plus INV-6 rules that ban
+   `innerHTML`, `outerHTML`, `document.write` and `dangerouslySetInnerHTML` at the linter layer too.
+   The one legitimate exception (the pre-paint skin picker) is disabled at its own line with a written
+   justification, so the exception stays greppable instead of being blanket-allowed.
+
+### Two findings, from a suite that was one hour old
+
+- **FINDING-06 (INV-5, live).** `lib/geoderive.ts` emits a Binance off-ramp marker for *every* actor —
+  `Math.max(1, p.infrastructure.length)` guarantees it — stamped `inferred: false` and captioned as a
+  known fact. A fabricated cash-out claim rendered like a measurement. Pinned as `it.fails` so the
+  suite stays green and the tests flip the moment it is fixed. **Phase 5 owns it.**
+- **FINDING-07 (dormant).** `trapFocus`/`focusableWithin` are called from nowhere — v2 removed every
+  dialog, so the DEC-042 fix guards nothing. Harmless today, a trap for Phases 2 and 3, which both add
+  drawers and modals. Printed as a journey GAP every run.
+
+### Rollback
+
+```bash
+git revert <phase-0b-sha>     # tests, config and docs only; no product behaviour
+```
+
+Files added: `web/__tests__/*.test.ts` (10), `web/.eslintrc.js`.
+Files changed: `web/vitest.config.ts`, `web/e2e/journey.mjs`, `web/app/layout.tsx` (comments +
+one lint-disable), `web/package.json` (two devDependencies), `docs/TESTLOG.md`.
+Files removed: **NONE**.
+
+### Next
+
+**Phase 1 — the skin bug: draw once per visit.** `skins.test.ts` already pins the picker's current
+contract and records that the semantic signal-root tokens (`--sig-identity`, `--sig-infra`, …) do not
+exist yet, which is the separation Phase 1 has to create.

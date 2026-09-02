@@ -21,7 +21,21 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={fontVars} suppressHydrationWarning>
       <head>
-        {/* Pick and apply a skin before first paint — no flash, no layout shift. */}
+        {/*
+          Pick and apply a skin before first paint — no flash, no layout shift.
+
+          THE ONLY dangerouslySetInnerHTML in the tree, and the only inline
+          script. It is safe because SKIN_PICKER_SCRIPT is a module constant
+          built from a hardcoded skin registry: no user input, no request data
+          and no engine response reaches it. It must be inline and synchronous
+          — an external script would paint the default palette first and then
+          repaint, which is the flash this exists to prevent.
+
+          The INV-6 lint rule fires here by design. Disabling it at this single
+          site keeps the exception greppable; a blanket allowance would let the
+          next one in silently, which is how FINDING-02 happened.
+        */}
+        {/* eslint-disable-next-line no-restricted-syntax -- documented INV-6 exception, see above */}
         <script dangerouslySetInnerHTML={{ __html: SKIN_PICKER_SCRIPT }} />
       </head>
       <body className="min-h-screen antialiased">

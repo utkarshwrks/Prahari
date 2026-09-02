@@ -714,3 +714,113 @@ The tree does not have the safety net the upgrade's prime directive depends on. 
 green at the end of every phase" is not a meaningful gate when `npm test` runs zero tests, and a visual
 baseline is worth much less than an e2e that actually walks the product. Restoring both is Phase 0
 work, not Phase 1 work — see `docs/UPGRADE_V2.1.md`.
+
+---
+
+## v2.1 Phase 0b — the safety net, restored
+
+The Phase 0 baseline was red. This phase makes the gate real. **No product code changed** — the only
+edit outside tests, config and docs is a comment block plus one `eslint-disable-next-line` in
+`app/layout.tsx`. Bundle sizes are byte-identical to the Phase 0 baseline.
+
+| Check | Phase 0 | Phase 0b | Result |
+|---|---|---|---|
+| `npm test` | 0 test files, exit 1 | **144 passed** (10 files) | **PASS** |
+| `npm run lint` | interactive prompt, exit 1 | no warnings or errors | **PASS** |
+| `npm run build` | clean | clean, identical route sizes | **PASS** |
+| `uv run pytest -q` | 239 passed, 17 skipped | 239 passed, 17 skipped | **PASS** |
+| `node web/e2e/journey.mjs` | harness error at check 1 | **35/35 passed** | **PASS** |
+| `forge test` | not run | not run | **CONDITION** |
+
+**Total: 418 green** (144 web · 239 engine · 35 e2e), plus 17 engine skips by design and 12 Solidity
+tests that this machine cannot run.
+
+### The web suite, rebuilt
+
+Not a restore of the deleted v1 files — most of what they covered no longer exists. New coverage for
+what ships today, weighted towards the invariants that had no assertion at all:
+
+| File | Tests | Covers |
+|---|---|---|
+| `security.test.ts` | 18 | **INV-2** (ENGINE_URL read only in the proxy, never `NEXT_PUBLIC_`, no client component reads a secret, the allowlist is an allowlist and its contents are pinned), **INV-6** (no `innerHTML`/`outerHTML`/`document.write` anywhere; `dangerouslySetInnerHTML` appears exactly once and is fed a module constant), **INV-7** (emoji and decorative-glyph greps), **INV-1** (no `.onion` fetch in the web layer) |
+| `report.test.ts` | 14 | **FINDING-02** — the audit's XSS payload set through `lib/report.ts`, asserting text-not-markup, no injected table cells, no `document.write`, no inline script |
+| `reportPdf.test.ts` | 18 | The second export path — the payload set through the vector report, null/empty/absurd-length fields, and **INV-5** (a null confidence renders as a dash, never as `0.000`) |
+| `authConfig.test.ts` | 18 | **INV-8** from both sides — production refuses a missing secret and refuses the committed dev default separately, while the build phase stays exempt (**DEC-051**) and only the build phase; demo-account gating; the RBAC matrix |
+| `a11y.test.ts` | 16 | **DEC-042** — ordering, filtering, wrap-around, Escape, focus restoration, and a source assertion that `offsetParent` has not returned |
+| `geoderive.test.ts` | 18 | **INV-5** on the map — derived points labelled inferred in the payload *and* the caption, determinism, no jitter |
+| `rateLimit.test.ts` | 13 | **DEC-046** — window behaviour, key isolation, bounded memory, and the fixed-vs-sliding limitation pinned rather than hidden |
+| `skins.test.ts` | 14 | Registry ↔ `globals.css` agreement in both directions; the pre-paint script is dependency-free, validates its inputs, and cannot break first paint |
+| `time.test.ts` | 10 | Freshness chips — including that a future timestamp clamps to "now" rather than rendering a negative age |
+| `features.test.ts` | 5 | Every flag defaults **OFF**, and only the exact value `1` enables one |
+
+Two deliberate design choices, both following DEC-042's lesson that happy-dom is not a browser:
+
+- `security.test.ts` and the DEC-042 case assert against the **source tree**, because "no file does X"
+  cannot be proven by exercising one code path — and under happy-dom the broken focus trap and the
+  correct one return the same list.
+- `security.test.ts` also reproduces the **original vulnerable construction** and asserts it fails the
+  same checks the fixed path passes, so the FINDING-02 assertions are provably load-bearing rather
+  than vacuously true.
+
+### The journey, repointed
+
+`web/e2e/journey.mjs` drove v1 and died before check 1. Rewritten against v2's real surface:
+**35 checks, 35 green**, up from 25 of which none were running.
+
+Kept, with referents that still exist: the 0.840-vs-0.999 pitch, the LR table, root causes, the ledger
+(chain of custody, `prev 0x` links, Merkle root, leaf count), the live region, reduced-motion parity,
+horizontal-overflow and `BANNED`-glyph checks at three viewports, and DEC-043 touch targets on a
+coarse pointer. Added: actor list and triage thresholds, graph mount and legend, all four panel tabs,
+the SANGAM route, keyboard reachability, focus visibility, and accessible names on every control.
+
+Four v1 checks have no v2 equivalent. They are **printed as GAPS on every run** rather than dropped:
+
+```
+GAP  threat level reaches CRITICAL      — v2 has no threat-level widget
+GAP  in-zone city rendered              — v2 has no geofence city list
+GAP  DEMO / DATASET / LIVE toggle       — v2 has no mode switch
+GAP  dialog focus trap (4 checks)       — v2 renders no role=dialog anywhere
+```
+
+### FINDING-06 — an INV-5 violation, found by the restored suite
+
+`lib/geoderive.ts` emits a **Binance off-ramp marker for every actor**, including one with no
+infrastructure, no markets and no personas:
+
+```js
+offramps.forEach((ex, i) => {
+  if (i >= Math.max(1, p.infrastructure.length)) return;   // max(1, 0) === 1
+```
+
+`Math.max(1, …)` guarantees the first iteration always runs. The marker is stamped `inferred: false`
+and captioned *"Wallet-cluster cash-out reaches Binance. Known exchange region."* — a positive,
+unhedged claim about an actor's cash-out route, derived from nothing, drawn on the map with the same
+styling as a measured fact. The source comment says "(illustrative)"; the payload says `inferred:
+false`. INV-5 requires a derived fact to be labelled as such in the payload **and** on screen.
+
+Pinned as two `it.fails` cases plus one that measures the current output. Not asserted as correct
+(that would cement it) and not skipped (that would hide it): as written the suite is green today and
+**these tests start failing the moment someone fixes the bug**, which is the prompt to remove the
+`.fails`. Phase 0b changes no product code. **Phase 5 owns the fix** — off-ramp geography becomes
+"always DERIVED, always labelled" under the three-class model.
+
+### FINDING-07 — the DEC-042 focus trap is unreachable
+
+`trapFocus` and `focusableWithin` are exported from `lib/a11y.ts` and **called from nowhere**. The v2
+rebuild removed every dialog, so the fix Phase 9 shipped now guards nothing, and `role="dialog"` does
+not appear in the tree. Not a live defect — there is no untrapped dialog, because there is no dialog.
+It is a standing trap for Phase 2 and Phase 3, both of which add drawers and modals. The journey
+prints it as a GAP on every run.
+
+### Stated condition
+
+`forge test` is **not run**: Foundry is not installed on this machine (`forge: command not found`).
+Install with `curl -L https://foundry.paradigm.xyz | bash && foundryup`. Phase 0b changed no Solidity,
+so the anchor suite's 12 tests are unaffected by construction — but that is an argument from the diff,
+not a measurement, and it is recorded as a condition rather than a pass.
+
+### Verdict
+
+**PHASE 0 GATE: GREEN.** Four of the five suites run and pass, the fifth is a stated environment
+condition. `npm test` and `node web/e2e/journey.mjs` can now fail, which is the only property that
+makes them gates. **Phase 1 may start.**
