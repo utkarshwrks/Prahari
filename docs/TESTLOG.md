@@ -897,3 +897,97 @@ interpolation) are all still asserted, more strictly than before.
 
 **PHASE 1 GATE: GREEN.** Skin constant within a visit, independent across visits, no first-paint
 flash, semantic tokens identical under all six skins with a passing control. **DEC-055.**
+
+---
+
+## v2.1 Phase 2 — the analyst workspace
+
+| Check | Phase 1 | Phase 2 | Result |
+|---|---|---|---|
+| `npm test` | 220 passed | **280 passed** (14 files) | **PASS** |
+| `npm run lint` | clean | clean | **PASS** |
+| `npm run build` | clean | clean, `/workbench` 103 kB (was 239 kB as the cockpit) | **PASS** |
+| `uv run pytest -q` | 239 / 17 skipped | 239 / 17 skipped | **PASS** |
+| `journey.mjs` — flag ON | 48/48 | **71/71** | **PASS** |
+| `journey.mjs` — flag OFF | n/a | **51/51** (23 workspace checks skipped by design) | **PASS** |
+| `forge test` | not run | not run | **CONDITION** |
+
+**Total: 590 green** (280 web · 239 engine · 71 e2e).
+
+### New unit coverage
+
+| File | Tests | Covers |
+|---|---|---|
+| `workspace.test.ts` | 18 | **No duplicate fetches** — one actor, one request, however many routes ask; one shared in-flight promise for simultaneous callers; exactly two calls per actor; five route visits add none. **One object, one number** — checked with `toBe`, not `toEqual`. Error classification, the 422-array case, timeline failure not taking the profile down, band thresholds |
+| `routes.test.ts` | 42 | All eleven route files exist and export a component; twelve legacy components still present; the workspace **reuses** each panel rather than forking it; the flag gates the shell not the routes; skip link, `nav` landmark, `aria-current`, `aria-sort`; **FINDING-07** (the palette uses `trapFocus`), `role="dialog"`/`aria-modal`/listbox semantics; deep-link keys in the URL; compare computes no score |
+
+### New e2e coverage — 23 checks (flag on)
+
+Eleven routes render at 200 with no client-side exception; **one actor, one
+confidence across all five actor routes** (`saw [0.991]`); a deep link restores
+band, sort and direction (`57 rows, band=Strong case, sort=Posts`); changing a
+facet writes it back to the URL; and seven command-palette checks covering
+Cmd/Ctrl-K, `role="dialog"`, focus entry, the Tab trap, actor search, Escape,
+and focus returning to the opener.
+
+### The journey now runs in both builds
+
+It detects the flag from the page (`nav[aria-label="Workspace"]`) rather than
+assuming it, and drives the cockpit at whichever path serves it. With the flag
+off it asserts the flag-off guarantee — the cockpit is at `/workbench`, the
+shell is not rendered — and prints four `SKIP` lines instead of passing
+vacuously.
+
+That detection is not defensive tidiness. **The flag-off build was broken and
+the flag-on gate could not see it**: the `/workbench` rewrite was registered as
+`afterFiles` (the default for a bare array), which applies only when no page
+matched, and `app/workbench/page.tsx` always matches. The rewrite never fired
+and the flag-off build served the Overview. Fixed with `beforeFiles`; verified
+by a full 51/51 flag-off run.
+
+### Three defects found by walking the routes in a real browser
+
+1. **`limit=500` → HTTP 422.** The engine caps at 200
+   (`Query(50, ge=1, le=200)`). Both the Overview and the actor list used 500.
+2. **A 422's `detail` is an array of objects**, not a string. Rendering it threw
+   React error #31 and blanked the entire route — a validation error took the
+   page down instead of printing one line. `detailOf()` now coerces any shape to
+   text, and every rendering call site goes through it.
+3. **The `beforeFiles` rewrite bug** above.
+
+None was reachable by a unit test of the code as written. All three took seconds
+to find with a browser pointed at a real engine, which is the standing argument
+for keeping this journey.
+
+### One flaky check replaced
+
+"skin is applied before first paint" raced an `evaluate()` against
+`waitUntil: "commit"`. It passed for two phases and then failed on an unrelated
+build — a flaky gate is worse than no gate. It now asserts the property
+structurally: the picker is an **inline, non-deferred script in `<head>`**, so
+it executes during head parsing, before the body exists and therefore before
+anything can be painted.
+
+It deliberately does **not** assert the script precedes the stylesheet links.
+Next injects those above the page's own head children, and it makes no
+difference — an inline head script is render-blocking either way; after a
+stylesheet the browser simply blocks it on the CSSOM first. Asserting the order
+would have been asserting a Next.js implementation detail rather than the
+guarantee.
+
+### A harness note worth writing down
+
+The journey logs in **four times per run** (main context, reduced-motion, touch,
+skin walk). `lib/auth.ts` rate-limits the credentials callback per IP with an
+in-process fixed-window counter (DEC-046), so several runs back to back get
+throttled and every subsequent run dies with `waitForURL: Timeout` at login.
+That is the limiter working, not a broken harness — restart the web server to
+clear the window. This cost real debugging time and is now in the file header.
+It is also a live demonstration of the DEC-046 limitation: the counter is
+module-scoped memory.
+
+### Verdict
+
+**PHASE 2 GATE: GREEN.** Ten routes live plus the classic cockpit, legacy
+cockpit intact and byte-identical at `/workbench/classic`, no duplicate fetches
+(measured), e2e green in both flag states. **DEC-056.**

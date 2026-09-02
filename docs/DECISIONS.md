@@ -776,3 +776,127 @@ reader who cannot distinguish the colours loses nothing.
 
 **Measured:** 48/48 e2e (13 new DEC-055 checks), 220 web unit tests, `/workbench` first-load JS
 unchanged at 131 kB / 239 kB.
+
+---
+
+## v2.1 Upgrade — Phase 2
+
+### DEC-056 — The workbench becomes ten routes with one shared actor object.
+
+The cockpit put a rail, a 3D graph, a full profile and a four-tab drawer in one
+viewport. Every panel was compressed to roughly a quarter of the screen, and the
+evidence trail — the panel the whole project argues from — was a 400 px column
+with a scrollbar.
+
+#### The decision
+
+Ten routed surfaces under `app/workbench/`, sharing a persistent shell:
+
+```
+/workbench                     Overview   · triage bands, model health, sources, graph, cases
+/workbench/actors              Actor list · full-width, faceted, sortable, deep-linkable
+/workbench/actor/[id]          Dossier    · profile, identifiers, personas, provenance
+/workbench/actor/[id]/graph    Graph lab  · full viewport (Phase 3 builds on this)
+/workbench/actor/[id]/evidence Evidence   · the arithmetic, full width
+/workbench/actor/[id]/timeline Timeline   · per persona, not aggregated
+/workbench/actor/[id]/chain    Chain flow · clusters, off-ramps, live trace
+/workbench/tor                 Tor timing lab
+/workbench/case/[caseId]       Case ledger
+/workbench/compare             Side-by-side comparison (new)
+/workbench/classic             The original cockpit, unchanged
+```
+
+**Nothing was rewritten.** Every route mounts the existing panel component;
+`routes.test.ts` asserts each import, so Phase 3 starts from the same
+`ActorGraphPanel` rather than a fork of it.
+
+#### One source of truth for the actor
+
+`lib/workspace.ts` — a zustand store with a cache keyed by actor id. The
+obvious implementation (each route fetching what it needs) refetches on every
+tab change and, worse, can render two different confidences for one actor if a
+refetch lands between two paints. In a product whose claim is that every
+published score reproduces from its trail exactly (INV-10), a dossier reading
+0.991 while the context bar reads 0.987 is not a rendering glitch — it is the
+screen contradicting itself about evidence.
+
+Measured, not asserted: the store counts its own calls, and the test proves
+**two network calls per actor** (profile, timeline) across five route visits.
+The e2e reads the confidence off all five actor routes in a real browser and
+asserts one distinct value. Identity is checked with `toBe`, not `toEqual` —
+two structurally equal objects from two fetches would pass a deep-equal check
+and still be the bug.
+
+#### Keeping `/workbench` working, and what it cost
+
+With the flag off, `/workbench` must be the cockpit, byte for byte. Expressing
+that as a branch inside `page.tsx` put **both** components into the route's
+bundle: 256 kB first-load JS against 103 kB for the Overview alone, because the
+dead branch dragged the cockpit and three.js in with it. A dynamic `import()`
+did not help — Next's client-reference graph includes both branches.
+
+So the split moved to the routing layer: a **rewrite** in `next.config.mjs`
+sends `/workbench` to `/workbench/classic` when the flag is off. The URL is
+unchanged, the component served is the same one, and neither build pays for the
+branch it does not use.
+
+That rewrite had to be `beforeFiles`. A bare array from `rewrites()` is
+`afterFiles`, which applies only when **no page matched** — and
+`app/workbench/page.tsx` always matches, so the rewrite silently never fired and
+the flag-off build served the Overview at `/workbench`. Nothing in the flag-on
+gate could have caught it; it was found by running the journey against a
+flag-off build, which is now something the journey does on its own (below).
+
+#### The journey detects the flag instead of assuming it
+
+`NEXT_PUBLIC_FF_WORKSPACE` is inlined at build time, so `journey.mjs` cannot
+read it. It asks the page — the presence of `nav[aria-label="Workspace"]` — and
+drives the cockpit at whichever path serves it in that build. With the flag off
+it asserts the flag-off guarantee instead (cockpit at `/workbench`, no shell)
+and prints four `SKIP` lines rather than passing vacuously. Assuming the flag
+was on is precisely how the rewrite bug survived its first run.
+
+#### FINDING-07, closed
+
+The command palette (Cmd/Ctrl-K) is the workspace's first dialog, and it wires
+`lib/a11y.ts`'s `trapFocus` back in. That function — the DEC-042 fix, which cost
+a Playwright run to find — had been referenced by no code since the v2 rebuild
+removed every dialog. The four dialog checks the journey lost in Phase 0b are
+restored against it, plus focus restoration, which is asserted by opening the
+palette **from a real control**: opening with Ctrl-K from an unfocused page
+leaves `activeElement` as `<body>`, which is not focusable, so there is nothing
+to restore to and the check would be meaningless.
+
+#### Two bugs found by walking the routes in a browser
+
+- **The engine caps `limit` at 200.** `api.actors("", 0, 500)` returned 422, and
+  the Overview and actor list both used it.
+- **A 422's `detail` is an array of objects**, not a string. Rendering it threw
+  React error #31 and blanked the whole route — a validation error took the page
+  down instead of printing one line. `detailOf()` in `lib/api.ts` now coerces any
+  `detail` shape to text, and every call site that renders one goes through it.
+
+Neither was reachable by a unit test of the code as written; both took ten
+seconds to find with a browser pointed at the real engine.
+
+#### The compare view computes nothing
+
+It shows shared identifiers, shared hosts, shared markets and shared signal
+roots — all facts about what two actors published — and states on screen that
+these are observations, not a verdict. The inference from "same PGP key" to
+"same operator" is the fusion engine's, is published with a calibrated
+confidence and a false-merge rate, and is not restated here. A comparison view
+is exactly where a tool starts implying things, and rule 5 of the playbook says
+no new surface may imply more than the code does. `routes.test.ts` asserts the
+file contains no scoring arithmetic.
+
+#### Honest degradation on the Overview
+
+Neo4j is unreachable on the free tier, so `/graph/stats` returns
+`available: false`. The identity-graph block renders **"Not available"** plus the
+reason and what still works — it does not draw six zeroes, because a zero is a
+measurement and "we could not ask" is not (INV-5, INV-9).
+
+**Measured:** 280 web unit tests, 71/71 e2e with the flag on, 51/51 with it off,
+`/workbench` 103 kB first-load JS (the cockpit stays 243 kB at
+`/workbench/classic`).

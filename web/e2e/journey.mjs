@@ -22,6 +22,15 @@
  *
  * Run:  node web/e2e/journey.mjs
  * Needs: web on :3000 (ENABLE_DEMO_ACCOUNT=1), engine on :8000.
+ *
+ * NOTE: this journey logs in four times per run (main context, reduced-motion,
+ * touch, and the skin walk). `lib/auth.ts` rate-limits the credentials callback
+ * per IP with an in-process fixed-window counter (DEC-046), so running the
+ * journey several times in a row will eventually be throttled and every run
+ * then dies with `waitForURL: Timeout` at login. That is the limiter working,
+ * not a broken harness. Restart the web server to clear the window -- the
+ * counter is module-scoped memory, which is precisely the limitation DEC-046
+ * documents.
  */
 import { chromium } from "playwright";
 
@@ -87,6 +96,29 @@ const run = async () => {
   console.log("\n== JOURNEY: login -> workbench -> evidence trail -> ledger ==");
   await login(page);
   log("login lands on /workbench", page.url().includes("workbench"));
+  await page.waitForTimeout(4000);
+
+  /**
+   * Which build is this?
+   *
+   * NEXT_PUBLIC_FF_WORKSPACE is inlined at build time, so the journey cannot
+   * read it -- it asks the page instead. With the flag on, /workbench is the
+   * Overview and the cockpit lives at /workbench/classic; with it off, a
+   * rewrite serves the cockpit at /workbench itself.
+   *
+   * Detecting rather than assuming means this file is a real gate for BOTH
+   * builds. Assuming the flag was on is exactly how the flag-off rewrite bug
+   * survived its first run.
+   */
+  const WORKSPACE = await page.evaluate(
+    () => document.querySelector('nav[aria-label="Workspace"]') !== null
+  );
+  const COCKPIT = WORKSPACE ? "/workbench/classic" : "/workbench";
+  console.log(`  ---   workspace flag: ${WORKSPACE ? "ON" : "OFF"} · cockpit at ${COCKPIT}`);
+
+  // The cockpit checks below are about the single-page cockpit specifically,
+  // so drive it where it actually lives in this build.
+  await page.goto(`${BASE}${COCKPIT}`, { waitUntil: "domcontentloaded" });
   // The workbench polls the engine on a 30 s timer, so the network is never
   // idle: settle on a timer rather than waiting for networkidle.
   await page.waitForTimeout(9000);
@@ -139,7 +171,7 @@ const run = async () => {
 
   // ------------------------------------------------------------ accessibility
   console.log("\n== ACCESSIBILITY ==");
-  await page.goto(`${BASE}/workbench`, { waitUntil: "domcontentloaded" });
+  await page.goto(`${BASE}${COCKPIT}`, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(9000);
 
   log("a status region is live",
@@ -172,6 +204,166 @@ const run = async () => {
   );
   log("every visible control has an accessible name", unnamed.length === 0,
       unnamed.slice(0, 3).join(" | "));
+
+  // ------------------------------------------------------- the workspace (DEC-056)
+  //
+  // Ten routed surfaces plus the legacy cockpit. The walk asserts each renders,
+  // that the store serves one actor object to all of them, and that the legacy
+  // page is still intact -- the prime directive is additive only.
+  console.log("\n== WORKSPACE (DEC-056) ==");
+
+  if (!WORKSPACE) {
+    // Not a silent skip: the flag-off build has its own guarantee to prove,
+    // which is that the cockpit is exactly where it always was.
+    const cockpitText = await page.evaluate(() => document.body.innerText);
+    log("flag off: /workbench still serves the single-page cockpit",
+        /\d+\s+resolved/i.test(cockpitText) && !/Skip to content/.test(cockpitText));
+    log("flag off: the workspace shell is not rendered",
+        (await page.locator('nav[aria-label="Workspace"]').count()) === 0);
+    for (const line of [
+      "ten workspace route checks — flag off",
+      "store invariant — flag off",
+      "deep-link round trip — flag off",
+      "command palette / focus trap — flag off",
+    ]) {
+      console.log(`  SKIP  ${line}`);
+    }
+  }
+
+  const WORKSPACE_ROUTES = WORKSPACE ? [
+    ["/workbench", /OVERVIEW|TRIAGE|Strong case/i, "Overview"],
+    ["/workbench/actors", /Search actors/i, "Actor list"],
+    ["/workbench/compare", /Compare two actors/i, "Compare"],
+    ["/workbench/tor", /TOR|timing/i, "Tor timing lab"],
+    ["/workbench/case/CASE-001", /CASE-001/i, "Case ledger"],
+    ["/workbench/actor/actor-088", /nightowl1/i, "Actor dossier"],
+    ["/workbench/actor/actor-088/graph", /nightowl1/i, "Graph lab"],
+    ["/workbench/actor/actor-088/evidence", /nightowl1/i, "Evidence trail"],
+    ["/workbench/actor/actor-088/timeline", /nightowl1/i, "Timeline"],
+    ["/workbench/actor/actor-088/chain", /nightowl1/i, "Chain flow"],
+    ["/workbench/classic", /ACTORS|resolved/i, "Classic cockpit"],
+  ] : [];
+
+  const wsErrors = [];
+  page.on("pageerror", (e) => wsErrors.push(e.message));
+
+  for (const [route, expected, label] of WORKSPACE_ROUTES) {
+    const res = await page.goto(`${BASE}${route}`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(route.includes("case") || route.endsWith("classic") ? 9000 : 4500);
+    const t = await page.evaluate(() => document.body.innerText);
+    log(`${label} renders`, res.status() === 200 && expected.test(t), `${res.status()}`);
+  }
+  if (WORKSPACE) {
+    log("no client-side exception on any workspace route", wsErrors.length === 0,
+        wsErrors.slice(0, 2).join(" | "));
+  }
+
+  if (WORKSPACE) {
+
+  // The store invariant, observed on the real screen: the confidence in the
+  // context bar must equal the dossier's on EVERY per-actor route.
+  const confidences = [];
+  for (const seg of ["", "/graph", "/evidence", "/timeline", "/chain"]) {
+    await page.goto(`${BASE}/workbench/actor/actor-088${seg}`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(4000);
+    confidences.push(
+      await page.evaluate(() =>
+        document.querySelector("[data-testid=context-actor]")?.getAttribute("data-confidence") ?? null
+      )
+    );
+  }
+  const distinct = new Set(confidences.filter(Boolean));
+  log("one actor, one confidence across all five actor routes",
+      distinct.size === 1 && confidences.every(Boolean), `saw [${[...distinct].join(", ")}]`);
+
+  // Deep-link round trip: a pasted URL must reproduce the exact view.
+  await page.goto(`${BASE}/workbench/actors?band=strong&sort=posts&dir=asc`, {
+    waitUntil: "domcontentloaded",
+  });
+  await page.waitForTimeout(4500);
+  const deep = await page.evaluate(() => ({
+    rows: document.querySelectorAll("tbody tr").length,
+    pressed: document.querySelector('[aria-pressed="true"]')?.textContent?.trim(),
+    sorted: document.querySelector('[aria-sort="ascending"]')?.textContent?.trim(),
+  }));
+  log("deep link restores band, sort and direction",
+      deep.rows > 0 && /strong/i.test(deep.pressed ?? "") && /posts/i.test(deep.sorted ?? ""),
+      `${deep.rows} rows, band=${deep.pressed}, sort=${deep.sorted}`);
+
+  // Changing a facet must be reflected back into the URL, or the link is a lie.
+  await page.goto(`${BASE}/workbench/actors`, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(4000);
+  await page.evaluate(() => {
+    const b = [...document.querySelectorAll("button")].find((x) =>
+      /worth a look/i.test(x.textContent ?? "")
+    );
+    b?.click();
+  });
+  await page.waitForTimeout(1200);
+  log("changing a facet writes it back to the URL", page.url().includes("band=worth-a-look"),
+      page.url().split("/workbench")[1] ?? "");
+
+  // Command palette: Cmd-K, and the DEC-042 focus trap it restores (FINDING-07).
+  console.log("\n== COMMAND PALETTE / FOCUS TRAP (FINDING-07) ==");
+  await page.goto(`${BASE}/workbench`, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(4000);
+  const dialogsBefore = await page.locator('[role="dialog"]').count();
+  await page.keyboard.press("Control+k");
+  await page.waitForTimeout(900);
+  const opened = await page.locator('[role="dialog"]').count();
+  log("Cmd/Ctrl-K opens the command palette", opened > dialogsBefore);
+
+  log("palette exposes role=dialog and aria-modal",
+      (await page.locator('[role="dialog"][aria-modal="true"]').count()) > 0);
+
+  const focusInside = await page.evaluate(() => {
+    const d = document.querySelector('[role="dialog"]');
+    return Boolean(d && d.contains(document.activeElement));
+  });
+  log("focus moves into the dialog", focusInside);
+
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Tab");
+  const stillInside = await page.evaluate(() => {
+    const d = document.querySelector('[role="dialog"]');
+    return Boolean(d && d.contains(document.activeElement));
+  });
+  log("Tab stays trapped inside the dialog", stillInside);
+
+  await page.keyboard.type("night");
+  await page.waitForTimeout(1200);
+  const hasResults = await page.evaluate(
+    () => document.querySelectorAll('[role="option"]').length > 0
+  );
+  log("palette searches actors", hasResults);
+
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(700);
+  log("Escape closes the dialog",
+      (await page.locator('[role="dialog"]').count()) <= dialogsBefore);
+
+  // Focus restoration needs something to restore TO. Opening with Ctrl-K from
+  // an unfocused page leaves activeElement as <body>, which is not focusable --
+  // so the meaningful test opens the palette from a real control and asserts
+  // the caret comes back to it. This is the DEC-042 guarantee end to end.
+  const restored = await page.evaluate(async () => {
+    const opener = [...document.querySelectorAll("button")].find(
+      (b) => b.getAttribute("aria-label") === "Open command palette"
+    );
+    if (!opener) return { ok: false, why: "no opener button" };
+    opener.focus();
+    opener.click();
+    await new Promise((r) => setTimeout(r, 600));
+    const trapped = Boolean(
+      document.querySelector('[role="dialog"]')?.contains(document.activeElement)
+    );
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await new Promise((r) => setTimeout(r, 600));
+    return { ok: trapped && document.activeElement === opener, why: document.activeElement?.tagName };
+  });
+  log("focus returns to the control that opened the palette", restored.ok, String(restored.why));
+  }
 
   // ------------------------------------------------------- skin: once per visit
   //
@@ -253,14 +445,41 @@ const run = async () => {
   await sp.waitForTimeout(700);
   log("?skin= did NOT overwrite the visit's draw", (await drawOf(sp)).skin === first.skin);
 
-  // No first-paint flash: the pre-paint script must have run before any body
-  // paint, so data-skin is present on the very first evaluation of a new page.
+  // No first-paint flash.
+  //
+  // This was originally asserted by racing an evaluate() against
+  // `waitUntil: "commit"`, which passed or failed depending on scheduling --
+  // it went green for two phases and then failed on an unrelated build. A
+  // flaky gate is worse than no gate, so the property is checked structurally
+  // instead, which is both deterministic and closer to what actually prevents
+  // the flash: the picker is an INLINE, SYNCHRONOUS, RENDER-BLOCKING script in
+  // <head>, so it executes during head parsing -- before the body exists and
+  // therefore before anything can be painted.
+  //
+  // NOT "ahead of the stylesheet": Next injects its stylesheet links above the
+  // page's own head children, and it makes no difference. An inline script in
+  // <head> is render-blocking either way; if it sits after a stylesheet link
+  // the browser simply blocks it on the CSSOM first. In both orders the
+  // attribute is set before first paint, so asserting the order would have
+  // been asserting a Next.js implementation detail, not the guarantee.
   const preflight = await skinCtx.newPage();
-  await preflight.goto(`${BASE}/`, { waitUntil: "commit" });
-  const atCommit = await preflight
-    .evaluate(() => document.documentElement.getAttribute("data-skin"))
-    .catch(() => null);
-  log("skin is applied before first paint (no flash)", Boolean(atCommit), String(atCommit));
+  await preflight.goto(`${BASE}/`, { waitUntil: "domcontentloaded" });
+  const paint = await preflight.evaluate(() => {
+    const scripts = [...document.head.querySelectorAll("script")];
+    const picker = scripts.find((sc) => !sc.src && sc.textContent.includes("data-skin"));
+    return {
+      inHead: Boolean(picker),
+      inline: Boolean(picker) && !picker.src,
+      notDeferred: Boolean(picker) && !picker.defer && !picker.async,
+      applied: document.documentElement.getAttribute("data-skin"),
+      source: document.documentElement.getAttribute("data-skin-source"),
+    };
+  });
+  log("skin picker is an inline synchronous script in <head> (no flash)",
+      paint.inHead && paint.inline && paint.notDeferred && Boolean(paint.applied),
+      `head=${paint.inHead} inline=${paint.inline} sync=${paint.notDeferred} skin=${paint.applied}`);
+  log("the draw records which tier answered",
+      ["query", "lock", "session", "fresh", "fallback"].includes(paint.source), String(paint.source));
   await preflight.close();
 
   // Semantic colour is NOT skin colour: the six signal-root tokens must be
@@ -316,6 +535,9 @@ const run = async () => {
   });
   const rmPage = await rm.newPage();
   await login(rmPage);
+  // The cockpit, not whatever /workbench resolves to in this build: these
+  // checks are about the graph's reduced-motion fallback specifically.
+  await rmPage.goto(`${BASE}${COCKPIT}`, { waitUntil: "domcontentloaded" });
   await rmPage.waitForTimeout(9000);
   const anim = await rmPage.evaluate(() => {
     let moving = 0;
@@ -359,6 +581,7 @@ const run = async () => {
   });
   const tPage = await touch.newPage();
   await login(tPage);
+  await tPage.goto(`${BASE}${COCKPIT}`, { waitUntil: "domcontentloaded" });
   await tPage.waitForTimeout(9000);
   const small = await tPage.evaluate(() => {
     const bad = [];
@@ -387,10 +610,9 @@ const run = async () => {
     "threat level reaches CRITICAL — v2 has no threat-level widget",
     "in-zone city rendered — v2 has no geofence city list",
     "DEMO / DATASET / LIVE toggle — v2 has no mode switch",
-    "dialog focus trap (4 checks) — v2 renders no role=dialog anywhere, so " +
-      "lib/a11y.ts trapFocus/focusableWithin are currently unreferenced. " +
-      "Any drawer or modal added in Phase 2/3 must wire them back in and " +
-      "restore these checks.",
+    // FINDING-07 is CLOSED: the command palette (DEC-056) is the workspace's
+    // first dialog and wires lib/a11y trapFocus back in. The four dialog checks
+    // above are the restored coverage, so this is no longer a gap.
   ]) {
     console.log(`  GAP   ${gap}`);
   }

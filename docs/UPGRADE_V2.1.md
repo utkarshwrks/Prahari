@@ -216,6 +216,70 @@ Files removed: **NONE**.
 
 ### Next
 
-**Phase 2 — the analyst workspace.** Ten routed surfaces under `/workbench/*` behind
-`NEXT_PUBLIC_FF_WORKSPACE`, with the legacy single-page cockpit still mounted at `/workbench/classic`.
-FINDING-07 lands here: the first drawer or modal must wire `trapFocus` back in.
+**Phase 2 — the analyst workspace.**
+
+---
+
+## Phase 2 — The analyst workspace
+
+**Status: COMPLETE. DEC-056.**
+
+| Check | Phase 1 | Phase 2 |
+|---|---|---|
+| `npm test` | 220 | **280 passed** |
+| `journey.mjs` (flag ON) | 48/48 | **71/71** |
+| `journey.mjs` (flag OFF) | n/a | **51/51** |
+| `uv run pytest -q` | 239 / 17 skipped | unchanged |
+| `npm run lint` / `build` | clean | clean; `/workbench` 103 kB, cockpit 243 kB at `/classic` |
+| `forge test` | not run | not run — same stated condition |
+
+**590 green.**
+
+### What changed
+
+1. **Ten routed surfaces** under `app/workbench/`, plus `/workbench/classic`. Every route mounts the
+   **existing** panel component — nothing was rewritten, and `routes.test.ts` asserts each import so
+   Phase 3 starts from the same `ActorGraphPanel` rather than a fork.
+2. **`lib/workspace.ts`** — one zustand store, one cache keyed by actor id. Measured: two network
+   calls per actor across five route visits, and one confidence on every route.
+3. **`WorkspaceShell`** — persistent navigator rail, context bar carrying the actor, its confidence
+   and band, and the two engine-sourced facts (refreshing every 30 s, never from constants).
+4. **`CommandPalette`** (Cmd/Ctrl-K) — **closes FINDING-07** by wiring `lib/a11y` `trapFocus` back in.
+5. **`CompareView`** — the one new surface. Shows shared identifiers, hosts, markets and signal roots,
+   and computes no score of its own.
+6. **The flag-off path is a rewrite**, not a branch: a branch put both components in one bundle
+   (256 kB against 103 kB).
+
+### Three defects found by walking the routes in a browser
+
+- **`limit=500` → 422.** The engine caps at 200.
+- **A 422's `detail` is an array of objects.** Rendering it threw React #31 and blanked the route.
+- **The rewrite never fired.** A bare `rewrites()` array is `afterFiles`, which only applies when no
+  page matched — and `app/workbench/page.tsx` always matches, so the **flag-off build served the
+  Overview**. Fixed with `beforeFiles`. The flag-on gate could not have caught it; `journey.mjs` now
+  detects the flag and runs in both builds.
+
+### Rollback
+
+```bash
+git revert <phase-2-sha>
+```
+
+Files added: `web/lib/workspace.ts`, `web/components/workspace/*` (6),
+`web/app/workbench/**` (11 route files + layout), `web/__tests__/{workspace,routes}.test.ts`,
+`web/e2e/__phase2__/*.png`.
+Files changed: `web/lib/api.ts` (`detailOf`), `web/app/globals.css` (`.hairline-r`),
+`web/next.config.mjs`, `web/e2e/journey.mjs`, `docs/{DECISIONS,TESTLOG,UPGRADE_V2.1}.md`.
+Files removed: **NONE**.
+
+### Flag state
+
+`NEXT_PUBLIC_FF_WORKSPACE=1` in `web/.env.local` — **on**, its gate having passed. It is not set in
+any committed env file, so a fresh clone still gets the legacy cockpit until it is switched on
+deliberately.
+
+### Next
+
+**Phase 3 — the graph intelligence lab.** Eleven graph kinds, a control column and a node inspector at
+`/workbench/actor/[id]/graph`, which this phase already gave a full viewport and wired to the existing
+`ActorGraphPanel`.

@@ -9,6 +9,29 @@ export interface EngineError {
   detail?: string;
 }
 
+/**
+ * Coerce any engine `detail` into a string safe to render.
+ *
+ * FastAPI's 422 responses carry `detail` as an ARRAY of validation objects
+ * (`{type, loc, msg, input, ctx}`), not a string. Passing that straight into
+ * JSX threw React error #31 ("objects are not valid as a React child") and
+ * blanked the whole route -- a validation error, which should have been a one
+ * line message, took the page down instead.
+ *
+ * Every call site that renders `detail` goes through this.
+ */
+export function detailOf(d: unknown, fallback = "The engine did not answer."): string {
+  const detail = (d as { detail?: unknown } | null)?.detail;
+  if (typeof detail === "string" && detail.trim()) return detail;
+  if (Array.isArray(detail)) {
+    const msgs = detail
+      .map((e) => (typeof e === "string" ? e : (e as { msg?: string })?.msg))
+      .filter(Boolean);
+    if (msgs.length) return msgs.join("; ");
+  }
+  return fallback;
+}
+
 async function call<T>(path: string, init?: RequestInit): Promise<T | EngineError> {
   try {
     const res = await fetch(`/api/engine/${path}`, { cache: "no-store", ...init });

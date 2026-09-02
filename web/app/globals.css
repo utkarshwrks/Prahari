@@ -170,6 +170,8 @@ body::after {
 }
 .panel-2 { background: var(--surface-2); border-radius: var(--radius); }
 .hairline { border-bottom: 1px solid var(--border); }
+/* Vertical counterpart, for the workspace navigator rail (DEC-056). */
+.hairline-r { border-right: 1px solid var(--border); }
 
 .glass {
   background: color-mix(in srgb, var(--surface) 70%, transparent);
