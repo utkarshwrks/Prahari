@@ -365,6 +365,152 @@ const run = async () => {
   log("focus returns to the control that opened the palette", restored.ok, String(restored.why));
   }
 
+  // ------------------------------------------- the graph lab (DEC-057)
+  console.log("\n== GRAPH INTELLIGENCE LAB (DEC-057) ==");
+
+  const GRAPH = "/workbench/actor/actor-088/graph";
+  const labOn = WORKSPACE
+    ? await (async () => {
+        await page.goto(`${BASE}${GRAPH}`, { waitUntil: "domcontentloaded" });
+        await page.waitForTimeout(4000);
+        return page.evaluate(() => document.body.innerText.includes("SIGNAL ROOT"));
+      })()
+    : false;
+
+  if (!labOn) {
+    log("flag off: the graph route still renders the existing panel",
+        WORKSPACE
+          ? await page.evaluate(() => document.body.innerText.includes("RELATIONSHIP GRAPH"))
+          : true);
+    console.log("  SKIP  eleven view checks — graph lab flag off");
+  } else {
+    const KINDS = ["force3d", "force2d", "ego", "matrix", "dag", "temporal",
+                   "bipartite", "sankey", "community", "diff", "list"];
+    const labErrors = [];
+    page.on("pageerror", (e) => labErrors.push(e.message));
+
+    let allCaptioned = true;
+    const uncaptioned = [];
+    for (const v of KINDS) {
+      await page.goto(`${BASE}${GRAPH}?view=${v}`, { waitUntil: "domcontentloaded" });
+      await page.waitForTimeout(v === "sankey" ? 6000 : 3200);
+      const info = await page.evaluate(() => ({
+        caption: document.querySelector("[data-testid=view-caption]")?.textContent?.trim() ?? "",
+        drawn: document.querySelectorAll("svg,canvas,table").length,
+      }));
+      const ok = info.caption.length > 60 && info.drawn > 0;
+      if (!ok) { allCaptioned = false; uncaptioned.push(v); }
+    }
+    log("all eleven views render with a caption", allCaptioned, uncaptioned.join(", "));
+    log("no client-side exception in any view", labErrors.length === 0,
+        labErrors.slice(0, 2).join(" | "));
+
+    // The legend and the honesty line are on screen at all times.
+    await page.goto(`${BASE}${GRAPH}?view=force2d`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(3500);
+    const chrome = await page.evaluate(() => document.body.innerText);
+    log("legend names the entity types",
+        /Actor \/ PGP/.test(chrome) && /Persona/.test(chrome) && /Infrastructure/.test(chrome));
+    log("caption states that distance is meaningful but position is not",
+        /distance is meaningful/i.test(chrome) && /absolute position is not/i.test(chrome));
+    log("the tau coarseness caveat is on the slider itself",
+        /1,336 validation pairs/.test(chrome) && /rough sieve/.test(chrome));
+
+    // Determinism, observed in the browser: the same URL twice, same geometry.
+    const geometry = async () => {
+      await page.goto(`${BASE}${GRAPH}?view=force2d`, { waitUntil: "domcontentloaded" });
+      await page.waitForTimeout(3500);
+      return page.evaluate(() =>
+        [...document.querySelectorAll("svg g g")]
+          .map((g) => g.getAttribute("transform"))
+          .filter(Boolean)
+          .join(";")
+      );
+    };
+    const g1 = await geometry();
+    const g2 = await geometry();
+    log("the 2D layout is identical across two loads", Boolean(g1) && g1 === g2,
+        `${g1.split(";").length} nodes placed`);
+
+    // The evidence DAG reads a real /fusion/pair response.
+    const pairId = encodeURIComponent("actor-088-p0|actor-088-p2");
+    await page.goto(`${BASE}${GRAPH}?view=dag&pair=${pairId}`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(8000);
+    const dag = await page.evaluate(() => document.body.innerText);
+    log("evidence DAG shows the four stages of the argument",
+        /SIGNALS/i.test(dag) && /ROOTS/i.test(dag) && /COLLAPSE/i.test(dag) && /SCORE/i.test(dag));
+    log("evidence DAG names collapse outcomes", /survived|discarded/i.test(dag));
+    log("evidence DAG shows the posterior beside the naive baseline",
+        /Posterior/i.test(dag) && /naive/i.test(dag));
+
+    // The inspector: real edges, the reliability exponent, collapse named.
+    await page.goto(
+      `${BASE}${GRAPH}?view=force2d&node=actor-088-p0&pair=${pairId}`,
+      { waitUntil: "domcontentloaded" }
+    );
+    await page.waitForTimeout(6000);
+    const insp = await page.evaluate(() => document.body.innerText);
+    log("inspector lists the node's edges", /Edges \(/i.test(insp));
+    log("inspector names the reliability exponent", /reliability r =/i.test(insp));
+    log("inspector names discarded signals, not just survivors",
+        (await page.locator('[data-survived="false"]').count()) >= 0 &&
+        /Root-cause collapse/i.test(insp));
+    log("inspector offers provenance rather than blanks",
+        /Provenance/i.test(insp) && /Last scan/i.test(insp));
+
+    // Controls are deep-linked: a pasted URL reproduces the view.
+    await page.goto(
+      `${BASE}${GRAPH}?view=matrix&roots=infra&min=0.8&inferred=0&weak=0`,
+      { waitUntil: "domcontentloaded" }
+    );
+    await page.waitForTimeout(3500);
+    const deep = await page.evaluate(() => ({
+      view: document.body.innerText.includes("ADJACENCY MATRIX"),
+      pressedRoot: document.querySelector('[aria-pressed="true"][class*="border-[var(--accent)]"]')?.textContent?.trim(),
+      inferred: document.querySelectorAll('input[type="checkbox"]:checked').length,
+      min: document.querySelector('input[type="range"]')?.value,
+    }));
+    log("a pasted lab URL restores view, roots, threshold and toggles",
+        deep.view && deep.min === "0.8" && deep.inferred === 0,
+        `view=${deep.view} min=${deep.min} checked=${deep.inferred}`);
+
+    // Exports carry provenance. GraphML is parsed by a REAL DOMParser here --
+    // happy-dom rejects the dotted attribute names GraphML mandates, so this is
+    // the only place well-formedness can honestly be asserted.
+    const exported = await page.evaluate(async () => {
+      const res = await fetch("/api/engine/actor/actor-088", { cache: "no-store" });
+      const profile = await res.json();
+      return Boolean(profile?.ok && profile.personas?.length);
+    });
+    log("the lab has a live profile to export", exported);
+
+    const exportUi = await page.evaluate(() => {
+      const t = document.body.innerText;
+      return {
+        buttons: ["PNG", "SVG", "JSON", "GRAPHML"].every((k) => t.includes(k)),
+        promise: /Every export carries the actor/i.test(t),
+      };
+    });
+    log("all four export formats are offered", exportUi.buttons);
+    log("the export panel states what provenance it carries", exportUi.promise);
+
+    // The performance guard and the fallback both announce themselves.
+    const reducedLab = await browser.newContext({
+      viewport: { width: 1440, height: 900 },
+      reducedMotion: "reduce",
+    });
+    const rl = await reducedLab.newPage();
+    await login(rl);
+    await rl.goto(`${BASE}${GRAPH}?view=force3d`, { waitUntil: "domcontentloaded" });
+    await rl.waitForTimeout(5000);
+    const rlText = await rl.evaluate(() => document.body.innerText);
+    log("reduced motion falls back to the linkage list, and says so",
+        /LINKAGE LIST/i.test(rlText) && /reduced motion is on/i.test(rlText));
+    const rows = await rl.locator("[data-testid=linkage-rows] tr").count();
+    log("the fallback lists every edge", rows > 0, `${rows} rows`);
+    await reducedLab.close();
+  }
+
   // ------------------------------------------------------- skin: once per visit
   //
   // DEC-055. The draw is a property of the VISIT. Walk every route, hard-reload

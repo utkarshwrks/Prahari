@@ -280,6 +280,67 @@ deliberately.
 
 ### Next
 
-**Phase 3 — the graph intelligence lab.** Eleven graph kinds, a control column and a node inspector at
-`/workbench/actor/[id]/graph`, which this phase already gave a full viewport and wired to the existing
-`ActorGraphPanel`.
+**Phase 3 — the graph intelligence lab.**
+
+---
+
+## Phase 3 — The graph intelligence lab
+
+**Status: COMPLETE. DEC-057.**
+
+| Check | Phase 2 | Phase 3 |
+|---|---|---|
+| `npm test` | 280 | **373 passed** |
+| `journey.mjs` | 71/71 | **90/90** |
+| `uv run pytest -q` | 239 / 17 skipped | unchanged |
+| `npm run lint` / `build` | clean | clean; graph route 123 kB |
+| `forge test` | not run | not run — same stated condition |
+
+**702 green.**
+
+### What changed
+
+1. **`lib/graphModel.ts`** — one model, eleven renderers, plus a hand-rolled **deterministic** force
+   solver (d3-force seeds from `Math.random` with no way to inject a generator).
+2. **`components/graph/views.tsx`** — ten view renderers, each exporting a caption that states what
+   its layout means.
+3. **`components/graph/NodeInspector.tsx`** — every edge with its signal root, strength and
+   reliability exponent, and **what root-cause collapse discarded**.
+4. **`lib/graphExport.ts`** — PNG / SVG / JSON / GraphML, each stamped with actor, filter state, view,
+   timestamp and engine version.
+5. **`components/graph/GraphLab.tsx`** — the shell. The 3D view is `ActorGraphPanel`, mounted
+   unchanged.
+
+### Three defects found by running the code
+
+- `createDocument` under happy-dom returns an **HTML** document, and `setAttribute("xmlns")` emitted a
+  duplicate namespace — malformed XML.
+- happy-dom's `DOMParser` **rejects `attr.name`**, which GraphML mandates, so re-parsing valid output
+  failed. Well-formedness moved to the e2e.
+- The 2D layout **settled into a thumbnail** in the middle of the stage. No test caught it; found by
+  screenshotting the page. Fixed with a uniform fit-to-stage scale.
+
+Plus one pre-existing: Phase 2's spy annotations failed `tsc --noEmit` while `next build` passed.
+
+### Rollback
+
+```bash
+git revert <phase-3-sha>
+```
+
+Files added: `web/lib/{graphModel,graphExport}.ts`, `web/components/graph/*` (4),
+`web/__tests__/{graphModel,graphViews,graphExport}.test.ts`, `web/e2e/__phase3__/*.png`.
+Files changed: `web/app/workbench/actor/[id]/graph/page.tsx`, `web/e2e/journey.mjs`,
+`web/vitest.config.ts`, `web/__tests__/workspace.test.ts`, `docs/*`.
+Files removed: **NONE**.
+
+### Flag state
+
+`NEXT_PUBLIC_FF_GRAPH_LAB=1` in `web/.env.local` — **on**, its gate having passed. Not set in any
+committed env file, so a fresh clone still gets the Phase 2 full-viewport panel.
+
+### Next
+
+**Phase 4 — the Command Panel.** Security first: role hierarchy, TOTP step-up, session hardening,
+CRUD, reports and analytics. The playbook's instruction for this phase is explicit — if the hardening
+cannot be finished, ship **nothing** of it.

@@ -991,3 +991,88 @@ module-scoped memory.
 **PHASE 2 GATE: GREEN.** Ten routes live plus the classic cockpit, legacy
 cockpit intact and byte-identical at `/workbench/classic`, no duplicate fetches
 (measured), e2e green in both flag states. **DEC-056.**
+
+---
+
+## v2.1 Phase 3 — the graph intelligence lab
+
+| Check | Phase 2 | Phase 3 | Result |
+|---|---|---|---|
+| `npm test` | 280 passed | **373 passed** (17 files) | **PASS** |
+| `npm run lint` | clean | clean | **PASS** |
+| `npm run build` | clean | clean, graph route 123 kB first-load JS | **PASS** |
+| `uv run pytest -q` | 239 / 17 skipped | 239 / 17 skipped | **PASS** |
+| `journey.mjs` | 71/71 | **90/90** (19 new lab checks) | **PASS** |
+| `forge test` | not run | not run | **CONDITION** |
+
+**Total: 702 green** (373 web · 239 engine · 90 e2e).
+
+### New unit coverage — 93 tests
+
+| File | Tests | Covers |
+|---|---|---|
+| `graphModel.test.ts` | 40 | Model construction; **agreement with `ActorGraph3D`'s private builder** on node and edge counts; the inferred flag; **determinism** across runs, across freshly built models, and differing per actor; pinning; the coincident-node `NaN` case; filters; ego hops; degree/components; the temporal scrubber's monotonicity; the evidence DAG naming discards; the **800-node budget** |
+| `graphViews.test.ts` | 35 | Exactly eleven kinds, all reachable, each with a stated question; **every view captioned** and each caption explaining what the layout means; the per-view honesty rules; the automatic fallback and its announcement; the perf guard; the inspector's no-invented-fields rules; deep-linked controls |
+| `graphExport.test.ts` | 18 | Provenance on every format; "not reported by the engine" rather than a fabricated version; JSON round-trip preserving `inferred`; **GraphML against the FINDING-02 payload set**; no model data interpolated into markup |
+
+### New e2e coverage — 19 checks
+
+```
+PASS  all eleven views render with a caption
+PASS  no client-side exception in any view
+PASS  legend names the entity types
+PASS  caption states that distance is meaningful but position is not
+PASS  the tau coarseness caveat is on the slider itself
+PASS  the 2D layout is identical across two loads — 7 nodes placed
+PASS  evidence DAG shows the four stages of the argument
+PASS  evidence DAG names collapse outcomes
+PASS  evidence DAG shows the posterior beside the naive baseline
+PASS  inspector lists the node's edges
+PASS  inspector names the reliability exponent
+PASS  inspector names discarded signals, not just survivors
+PASS  inspector offers provenance rather than blanks
+PASS  a pasted lab URL restores view, roots, threshold and toggles
+PASS  the lab has a live profile to export
+PASS  all four export formats are offered
+PASS  the export panel states what provenance it carries
+PASS  reduced motion falls back to the linkage list, and says so
+PASS  the fallback lists every edge — 13 rows
+```
+
+The determinism check is done **in the browser**, comparing the SVG transform
+attributes across two loads of the same URL. The unit test proves the solver is
+deterministic; this proves the rendered page is, which is the property the gate
+actually asks for.
+
+### Three defects found while building, all by running the code
+
+1. **`createDocument` under happy-dom returns an HTML document** whose root is
+   `<html>`, and `setAttribute("xmlns", …)` emitted a **second** xmlns attribute
+   beside the implicit one — malformed XML ("attributes construct error"). Fixed
+   by seeding through `DOMParser` and using `createElementNS`.
+2. **happy-dom's `DOMParser` rejects `attr.name` / `attr.type`.** The dot is
+   legal in an XML attribute name and GraphML mandates exactly those two, so
+   re-parsing *valid* output failed. Well-formedness moved to the e2e, where a
+   real `DOMParser` exists. Asserting it under happy-dom would be testing
+   happy-dom — DEC-042 again.
+3. **The 2D layout settled into a thumbnail** in the middle of a 900×800 stage.
+   No test caught it and none would have: every assertion about bounds and
+   determinism passed. Found by screenshotting the real page. Fixed with a
+   uniform fit-to-stage scale, which preserves distance ratios and therefore the
+   caption's claim.
+
+### One pre-existing defect closed
+
+`__tests__/workspace.test.ts` (Phase 2) annotated its spies as
+`ReturnType<typeof vi.spyOn>`, which erases the method signature to
+`(...args: unknown[]) => unknown` and then refuses the concrete `api.actor`
+overload. `npx tsc --noEmit` failed on it; **`next build` did not surface it**,
+which is why Phase 2 went green. Fixed by inferring the types from a factory.
+The lesson is recorded because it generalises: `next build`'s type check is not
+a substitute for `tsc --noEmit` over the whole tree.
+
+### Verdict
+
+**PHASE 3 GATE: GREEN.** Eleven views, all captioned, fallback intact and
+announced, exports carry provenance, determinism proven in the browser.
+**DEC-057.**

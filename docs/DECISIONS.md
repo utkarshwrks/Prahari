@@ -900,3 +900,153 @@ measurement and "we could not ask" is not (INV-5, INV-9).
 **Measured:** 280 web unit tests, 71/71 e2e with the flag on, 51/51 with it off,
 `/workbench` 103 kB first-load JS (the cockpit stays 243 kB at
 `/workbench/classic`).
+
+---
+
+## v2.1 Upgrade — Phase 3
+
+### DEC-057 — Eleven views of one graph model, each stating what its layout means.
+
+There was exactly one graph visualisation: a 3D force layout. It is a good one,
+but a force layout answers exactly one question — *what is the overall shape* —
+and an analyst asking "which identifier carries this link" or "why are these two
+personas the same actor" got no help from it.
+
+#### The decision
+
+Eleven representations at `/workbench/actor/[id]/graph`, behind
+`NEXT_PUBLIC_FF_GRAPH_LAB`, with a control column on the left and a node
+inspector on the right:
+
+| View | Answers |
+|---|---|
+| 3D force (**existing, unchanged**) | overall shape, who clusters with whom |
+| 2D force | precise reading, printing, reproducible screenshots |
+| Ego network (1/2/3 hops) | what one node is directly attached to |
+| Adjacency matrix | dense subgraphs, where a force layout turns to hairball |
+| **Evidence DAG** | *why* two personas are linked — the courtroom view |
+| Temporal | how the network formed over time |
+| Bipartite persona ↔ identifier | which identifier carries the link |
+| Value flow | where value moves |
+| Communities | how the graph partitions |
+| Comparison diff | what two actors share |
+| 2D linkage list (**existing fallback**) | every edge, as text |
+
+`ActorGraphPanel` and `ActorGraph3D` are **mounted unchanged** as the default
+view. `graphModel.test.ts` asserts `ActorGraph3D` still owns its private builder
+and does not import the shared model — the lab wraps it, it does not replace it.
+
+#### One model, eleven renderers
+
+`lib/graphModel.ts` builds the graph once. Eleven builders each walking the
+profile their own way would let the matrix and the force layout disagree about
+whether an edge exists, and the analyst would have no way to tell which was
+lying. A test asserts the shared model and `ActorGraph3D`'s private builder
+produce the same node and edge counts, so they cannot drift.
+
+#### Determinism was hand-rolled, deliberately
+
+The gate requires the 2D layout to be **identical across two runs** — otherwise a
+screenshot in a report cannot be reproduced, and two analysts comparing notes see
+different pictures of the same actor.
+
+d3-force seeds its initial positions from `Math.random` with no supported way to
+inject a generator, so the layout is a hand-written force solver over a
+mulberry32 PRNG seeded from the **actor id**, with a fixed iteration count rather
+than a decaying alpha. "Usually the same" is not determinism.
+
+Two details that matter:
+
+- **Coincident nodes are nudged along a deterministic axis**, never randomly.
+  The repulsion step divides by distance; the coincident case is the one that
+  produces `NaN` and silently blanks the entire drawing. A test pins every node
+  to one point and asserts finite output.
+- **The fit-to-stage pass is a uniform scale plus a translation.** Without it the
+  layout settled into a thumbnail in the middle of a 900×800 stage — found by
+  screenshotting the real page, not by any test. Uniform is the load-bearing
+  word: it preserves every ratio between distances, so the caption's claim
+  ("distance is meaningful; absolute position is not") stays exactly as true
+  after fitting. A non-uniform stretch would make it false.
+
+#### Every view carries a caption, and the captions are the honesty surface
+
+A picture of a network implies a claim, and an unlabelled picture implies
+whichever claim the viewer already held. So each view states **what its layout
+means**, and several captions exist specifically to refuse an over-reading:
+
+- The **community** view names the source of its partition on screen. Neo4j GDS
+  Louvain and a local weakly-connected-components pass are different claims —
+  WCC finds disconnected pieces, not communities, and labelling one as the other
+  would overstate it. Neo4j is unreachable on the free tier, so the local pass is
+  usually what runs, and the view says so.
+- The **value flow** view states that bar width is transaction count, **not
+  amount**. The engine clusters by co-spend and does not value the flows; drawing
+  a width from a number it does not have would be an invention.
+- The **comparison diff** shows shared node values and explicitly does not
+  conclude that two actors are one operator.
+- The **fallback** promises completeness: no edge dropped, summarised or rounded
+  away.
+
+#### The node inspector invents nothing
+
+Every row is read from a payload the engine returned; unknown facts render as
+"not recorded" rather than a blank or a plausible default. For each edge it names
+the signal root, the strength, and the reliability exponent `r` — or says
+"not published for this root" when `/fusion/model` did not report one.
+
+It also names **what root-cause collapse discarded**, not just what survived.
+Collapse is the most contestable step in the model and the one an opposing expert
+attacks; a panel showing only survivors would be hiding the argument. The
+`roots_collapsed` payload already carries it.
+
+Actions are gated on what can actually succeed: "trace on chain" appears on
+wallet nodes only, "open in SANGAM" on hosts only. An action that cannot succeed
+should not be on screen — offering a chain trace for a PGP key implies a
+capability that does not exist.
+
+#### Exports carry provenance, or they are not exhibits
+
+PNG, SVG, JSON and GraphML, each stamped with the actor id, the **complete filter
+state**, the view, a UTC timestamp and the engine version. A PNG of a filtered
+graph with no record of the filter is a picture nobody can challenge — an
+opposing expert cannot reproduce it, and neither can the analyst who made it
+three months later. Where the engine did not report a version, the export says
+"not reported by the engine" rather than inventing one.
+
+GraphML is built with `createElementNS` + `textContent` + `XMLSerializer`, never
+string templating (INV-6). A node label is market-sourced text, and interpolating
+it into an XML template is precisely the shape of FINDING-02. A test runs the
+payload set through it and asserts the label survives **escaped** while the
+element count is unchanged.
+
+Two bugs were found writing that exporter, both by running it:
+
+- `document.implementation.createDocument` under happy-dom yields an **HTML**
+  document whose root is `<html>`, and declaring the namespace with
+  `setAttribute("xmlns", …)` emits a **second** xmlns attribute beside the
+  implicit one — malformed XML. Fixed by seeding through `DOMParser` and using
+  `createElementNS`, which is also simply the correct API.
+- happy-dom's `DOMParser` then **rejects `attr.name` and `attr.type`** — the dot
+  is legal in an XML attribute name and GraphML mandates exactly those two — so
+  re-parsing valid output failed. Well-formedness is therefore asserted in the
+  e2e, where a real `DOMParser` exists; asserting it under happy-dom would be
+  testing happy-dom. DEC-042 remains the standing reminder.
+
+#### Performance, stated rather than hoped
+
+Above **800 nodes** a force layout is both an unreadable hairball and an O(n²)
+solve on a mid-range laptop. The lab degrades to the adjacency matrix and **says
+why**, naming the node count and how to get back — silently rendering a different
+view than the one asked for is the tool lying about what it is showing. The
+budget is measured: an 800-node fixture lays out under 2 s, a typical actor under
+250 ms. The 3D bundle stays behind `dynamic()`, and a test asserts the lab never
+imports the three module directly, which would defeat that boundary.
+
+#### The fallback is automatic and announced
+
+`prefers-reduced-motion` or missing WebGL falls back to the complete linkage
+list, with a banner saying which condition applied. Information always survives
+(INV-11).
+
+**Measured:** 373 web unit tests, 19 new e2e checks, all eleven views captioned
+and exception-free, `/workbench/actor/[id]/graph` 123 kB first-load JS.

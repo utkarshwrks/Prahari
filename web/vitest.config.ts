@@ -23,6 +23,8 @@ export default defineConfig({
       ["__tests__/report.test.ts", "happy-dom"],
       ["__tests__/a11y.test.ts", "happy-dom"],
       ["__tests__/reportPdf.test.ts", "happy-dom"],
+      // GraphML is built with document/XMLSerializer/DOMParser (DEC-057).
+      ["__tests__/graphExport.test.ts", "happy-dom"],
     ],
     include: ["__tests__/**/*.test.ts"],
   },

@@ -39,13 +39,27 @@ const profile = (over: Record<string, unknown> = {}) => ({
 
 const timeline = { ok: true, actor_id: "actor-088", bucket: "week", buckets: [], series: [] };
 
-let actorSpy: ReturnType<typeof vi.spyOn>;
-let timelineSpy: ReturnType<typeof vi.spyOn>;
+/**
+ * Spies are created through a factory so their types are INFERRED.
+ * `ReturnType<typeof vi.spyOn>` erases the method signature down to
+ * `(...args: unknown[]) => unknown`, which then refuses the concrete
+ * `api.actor` overload -- a `tsc --noEmit` error that `next build` does not
+ * surface, so it is worth keeping the inference rather than annotating.
+ */
+function mockApi() {
+  return {
+    actor: vi.spyOn(apiModule.api, "actor").mockResolvedValue(profile() as never),
+    timeline: vi.spyOn(apiModule.api, "timeline").mockResolvedValue(timeline as never),
+  };
+}
+let actorSpy: ReturnType<typeof mockApi>["actor"];
+let timelineSpy: ReturnType<typeof mockApi>["timeline"];
 
 beforeEach(() => {
   useWorkspace.getState().reset();
-  actorSpy = vi.spyOn(apiModule.api, "actor").mockResolvedValue(profile() as never);
-  timelineSpy = vi.spyOn(apiModule.api, "timeline").mockResolvedValue(timeline as never);
+  const spies = mockApi();
+  actorSpy = spies.actor;
+  timelineSpy = spies.timeline;
 });
 afterEach(() => vi.restoreAllMocks());
 
