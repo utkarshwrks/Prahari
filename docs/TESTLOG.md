@@ -641,3 +641,76 @@ pass would be the precise failure this phase exists to prevent.
 **Tag `v2.0-sih` when:** the D3.1 review returns PASS in a fresh session, two teammates run the manual
 checklists, and either a Sepolia seal is recorded in `docs/QA.md` or the deck says
 "Sepolia-ready, demonstrated on a local chain".
+
+---
+
+## v2.1 baseline
+
+Phase 0 of the v2.1 upgrade. Branch `feat/v2.1-workspace` off `v2-rebuild` @ `800d9ae`.
+Run on the working tree, macOS 15 (darwin 25.5.0), Node v26.7.0, npm 11.19.0, Python 3.12.
+
+The playbook this phase executes expects **371 green**. That number is real — it was measured at the
+Phase 11 release gate above — but it is **no longer true of this tree**, and the difference is not a
+regression introduced here. Recorded exactly as found:
+
+| Check | Expected | Measured | Result |
+|---|---|---|---|
+| `npm ci` (web) | clean | clean | **PASS** |
+| `npm test` (web) | 98 passed | **0 test files, exit 1** | **FAIL** |
+| `npm run lint` (web) | clean | ESLint unconfigured; `next lint` opens an interactive setup prompt and exits 1 | **FAIL** |
+| `npm run build` (web) | clean | compiled, 10 routes, middleware 49.3 kB | **PASS** |
+| `uv sync --extra dev` | clean | clean | **PASS** |
+| `uv run pytest -q` | 236 passed | **239 passed, 17 skipped** in 12.94 s | **PASS** |
+| `forge test` | 12 passed | `forge` not installed on this machine | **NOT RUN** |
+| `node web/e2e/journey.mjs` | 25/25 | harness error at check 1 | **FAIL** |
+
+### Why three of these are red
+
+**1. The web unit suite does not exist.** `aa8789e` ("rebuild the product as an attribution workbench;
+remove v1 entirely") deleted `web/__tests__/` in full — `a11y`, `cities`, `extractor`, `mode`,
+`report`, `security`, 891 lines, 98 tests — along with the v1 console those tests covered. Nothing
+replaced them. `web/vitest.config.ts` still names `__tests__/**/*.test.ts` and still lists the two
+happy-dom overrides for files that are gone, so `vitest run` reports *"No test files found"* and exits
+1. The commit message says "Engine untouched: 236 tests still green" and does not mention the web
+suite; the loss was never recorded.
+
+This matters beyond the count. Three of those files tested code that **survived the rebuild** and is
+still shipping: `lib/report.ts` (the `createElement` + `textContent` escape-by-construction path that
+closes FINDING-02), `lib/a11y.ts` (the DEC-042 `getClientRects()` focus trap), and the security
+assertions that enforce INV-6. Those invariants are currently asserted by nothing.
+
+**2. `npm run lint` was never configured.** There is no `.eslintrc*` and no `eslintConfig` block, so
+`next lint` tries to scaffold one interactively. In CI or a non-TTY shell it exits non-zero without
+linting anything. `npm run build` does typecheck (`tsc --noEmit` passes clean), so type safety is
+covered; lint rules are not.
+
+**3. The e2e journey still drives v1.** `web/e2e/journey.mjs` waits for `**/dashboard` after login
+(line 47). The v2 rebuild removed `/dashboard`; `LoginForm.tsx:26` navigates to `/workbench`. The
+harness dies on its first navigation, so **none** of the 25 checks — including the `BANNED` emoji regex
+that enforces INV-7/DEC-002 — has run since the rebuild.
+
+### What passes, verified
+
+- `uv run pytest -q`: **239 passed, 17 skipped**, 12.94 s. Three more than the 236 recorded at the
+  release gate. The 17 skips are the network- and chain-gated tests, skipped by design.
+- `npm run build`: clean compile, `tsc --noEmit` clean, 10 routes.
+- Both services boot and serve: engine `GET /health` → 200 (caches warmed in 0.8 s), web → 200.
+- Login through the real browser succeeds against the seeded demo account and lands on `/workbench`.
+
+### Baseline screenshots
+
+`node web/e2e/baseline-shots.mjs` → `web/e2e/__baseline__/{home,login,workbench,sangam}.png`.
+1440×900, `fullPage`, skin pinned to `abyss` via `?skin=` so a re-run is diffable — without the pin the
+generative skin picker draws a different palette every run and every diff is noise. Guarded routes are
+captured after a real credential login. Waits are `domcontentloaded` + 6 s settle, not `networkidle`:
+the workbench polls the engine on a 30 s timer, so the network is never idle and `networkidle` always
+times out.
+
+### Verdict
+
+**BASELINE: RED. Phase 0's gate is NOT met and Phase 1 does not start against it.**
+
+The tree does not have the safety net the upgrade's prime directive depends on. "`npm test` must be
+green at the end of every phase" is not a meaningful gate when `npm test` runs zero tests, and a visual
+baseline is worth much less than an e2e that actually walks the product. Restoring both is Phase 0
+work, not Phase 1 work — see `docs/UPGRADE_V2.1.md`.
