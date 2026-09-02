@@ -509,6 +509,57 @@ git revert <phase-6-sha>
 
 ### Next
 
-**Phase 7 — always-on within the free tier.** The status dot this phase built is the surface Phase 7
-feeds. Its first instruction is explicit: **verify Render's real free-tier figures from the live docs
-and the account's usage page** before writing any schedule — do not trust remembered numbers.
+**Phase 7 — always-on within the free tier.**
+
+---
+
+## Phase 7 — Always-on within the free tier
+
+**Status: CONDITIONAL PASS. DEC-064, DEC-065.**
+
+| Check | Phase 6 | Phase 7 |
+|---|---|---|
+| `npm test` | 950 | **986 passed** |
+| `uv run pytest -q` | 452 | **482 passed** / 17 skipped |
+| `journey.mjs` | 137/137 | **147/147** |
+| `npm run warmup` | n/a | 3/3 awake, 4 caches warmed |
+| `forge test` | not run | not run — same stated condition |
+
+**1,615 green.**
+
+### The figures were verified, and they changed the design
+
+<https://render.com/docs/free>, 2026-09-03: **750 hours per workspace per calendar month, shared**;
+15-minute spin-down; ~1-minute cold start; hours consumed only while running.
+
+The playbook assumed two services and ~12 h/day. There are **three** sharing one pool, so the honest
+window is **seven hours** — `750 × 0.85 ÷ 3 ÷ 30.44 = 6.98 h/service/day`. The schedule followed the
+numbers, as the playbook itself instructed.
+
+### Three defects found by running the code
+
+- **The guard failed OPEN**: a corrupt artifact was indistinguishable from a missing one, so it
+  believed nothing had been spent and pinged freely.
+- **`date +%s%3N` is GNU-only** and BSD `date` *succeeds* with a literal `3N`, so every cache-warm
+  timing on macOS was garbage.
+- **`ENGINE_URL` gained a third reader**, caught by the pinned INV-2 test exactly as designed.
+
+### Why CONDITIONAL
+
+The gate's wording — *"both services warm through the whole configured window, measured monthly usage
+inside the free allowance"* — needs a month of real running and the **account owner's usage page**,
+which cannot be read from here (rule 7). Two facts are recorded in `docs/UPTIME.md` as conditions
+rather than assumed: that the workspace holds exactly three free web services, and the month's actual
+consumption. Everything mechanically verifiable is green.
+
+### Rollback
+
+```bash
+git revert <phase-7-sha>
+```
+
+### Next
+
+**Phase 8 — harden, measure, document, release.** The final gate: security pass over everything added,
+Lighthouse and bundle analysis, an axe pass on every new route, ≥ 450 tests (already far exceeded),
+docs complete, and a **fresh-clone run with no local state**.

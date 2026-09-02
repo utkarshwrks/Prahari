@@ -21,6 +21,7 @@
     "migrate": "cd engine && uv run alembic upgrade head",
     "demo": "bash scripts/demo.sh",
     "e2e": "node web/e2e/journey.mjs",
+    "warmup": "bash scripts/warmup.sh",
     "test:all": "npm test && (cd engine && uv run pytest -q) && (cd anchor && forge test)"
   },
   "devDependencies": {

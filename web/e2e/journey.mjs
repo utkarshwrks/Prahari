@@ -383,6 +383,64 @@ const run = async () => {
   log("focus returns to the control that opened the palette", restored.ok, String(restored.why));
   }
 
+  // --------------------------------------------- keep-alive (DEC-064/065)
+  console.log("\n== KEEP-ALIVE (DEC-064, DEC-065) ==");
+
+  const ping = await page.evaluate(async () => {
+    const started = performance.now();
+    const r = await fetch("/api/engine/health/ping", { cache: "no-store" });
+    const body = await r.json();
+    return { status: r.status, ms: Math.round(performance.now() - started), body };
+  });
+  log("the engine ping answers", ping.status === 200 && ping.body.ok === true);
+  log("it reports uptime, pings and the budget",
+      ["uptime_s", "awake_since", "pings_24h", "budget_used_pct", "next_window"]
+        .every((k) => k in ping.body),
+      Object.keys(ping.body).join(", "));
+  log("it is fast enough to be a keep-alive", ping.ms < 400, `${ping.ms} ms round trip`);
+
+  const health = await page.evaluate(async () => {
+    const r = await fetch("/api/health", { cache: "no-store" });
+    return { status: r.status, cache: r.headers.get("cache-control"), body: await r.json() };
+  });
+  log("the web health endpoint answers", health.status === 200 && health.body.ok === true);
+  log("it is never cached",
+      /no-store/.test(health.cache ?? ""), health.cache ?? "no header");
+  log("the shallow check does NOT call the engine", health.body.engine === undefined);
+
+  const deep = await page.evaluate(async () => {
+    const r = await fetch("/api/health?deep=1", { cache: "no-store" });
+    return r.json();
+  });
+  log("?deep=1 reaches the engine and reports its latency",
+      deep.deep === true && typeof deep.engine?.latency_ms === "number",
+      `engine ok=${deep.engine?.ok} ${deep.engine?.latency_ms}ms`);
+
+  // The uptime card in the Command Panel, if that flag is on.
+  await page.goto(`${BASE}/command`, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(4000);
+  const hasPanel = await page.evaluate(
+    () => document.body.innerText.includes("COMMAND PANEL")
+  );
+  if (hasPanel) {
+    await page.evaluate(() => {
+      [...document.querySelectorAll("button")]
+        .find((b) => /uptime/i.test(b.textContent ?? ""))?.click();
+    });
+    await page.waitForTimeout(3000);
+    const card = await page.evaluate(() => ({
+      present: document.querySelector("[data-testid=uptime-card]") !== null,
+      text: document.body.innerText,
+    }));
+    log("the Command Panel shows a measured uptime card", card.present);
+    log("it states the budget is an estimate and names the authority",
+        /Render is the authority/i.test(card.text));
+    log("it tells the operator to warm up before a demo",
+        /npm run warmup/i.test(card.text));
+  } else {
+    console.log("  SKIP  uptime card — command flag off");
+  }
+
   // ------------------------------------------------- the footer (DEC-063)
   console.log("\n== FOOTER AND v1 LINKING (DEC-063) ==");
 

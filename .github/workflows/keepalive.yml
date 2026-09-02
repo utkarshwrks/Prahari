@@ -1,0 +1,163 @@
+# Keep-alive for the free Render services (DEC-064, DEC-065).
+#
+# VERIFIED FIGURES, from Render's live documentation on 2026-09-03:
+#   * 750 free instance hours per WORKSPACE per calendar month, SHARED across
+#     every free service — not granted per service.
+#   * A free web service spins down after 15 minutes without inbound traffic.
+#   * Spin-up takes about one minute.
+#   * Hours are consumed only while running; a spun-down service consumes none.
+#
+# THE ARITHMETIC THOSE FIGURES FORCE, for three free services:
+#   750 / 3            = 250 h per service per month
+#   250 / 30.44        = 8.2 h per service per day
+#   with an 85% guard  = 6.98 h per service per day
+#
+# So the window below is SEVEN HOURS, not the twelve the playbook assumed —
+# that assumption was written for two services and there are three. The
+# playbook's own instruction was that the schedule adapts to the real numbers.
+#
+# The window is 04:00–11:00 UTC = 09:30–16:30 IST, which covers an Indian
+# working day and a demo slot. Change WINDOW_START/END together with the
+# cron below; they must agree, and the workflow refuses to run if they do not.
+
+name: keepalive
+
+on:
+  schedule:
+    # Every 10 minutes, 04:00–10:59 UTC. Ten minutes leaves headroom for one
+    # skipped run — GitHub's cron is best-effort, not guaranteed, and at a
+    # 14-minute interval a single miss would let the service sleep.
+    - cron: "*/10 4,5,6,7,8,9,10 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Report what would be pinged, without pinging"
+        type: boolean
+        default: true
+
+concurrency:
+  group: keepalive
+  cancel-in-progress: false
+
+permissions:
+  contents: write   # to commit the budget artifact
+  issues: write     # to raise one when a target fails repeatedly
+
+env:
+  WINDOW_START: "4"
+  WINDOW_END: "11"
+  FREE_HOURS_POOL: "750"
+  # Set to "0" to take a service out of rotation without editing the matrix.
+  PING_ENGINE: "1"
+  PING_WEB: "1"
+  PING_V1: "1"
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify the window and the cron agree
+        run: |
+          # A schedule that disagrees with its own guard is a schedule that
+          # burns budget outside the window it claims to keep.
+          CRON_HOURS=$(grep -oE 'cron: "\*/10 [0-9,]+' .github/workflows/keepalive.yml | grep -oE '[0-9,]+$')
+          EXPECTED=$(seq -s, "${WINDOW_START}" $(( WINDOW_END - 1 )))
+          if [ "$CRON_HOURS" != "$EXPECTED" ]; then
+            echo "::error::cron hours ($CRON_HOURS) do not match WINDOW_START/END ($EXPECTED)"
+            exit 1
+          fi
+          echo "window $WINDOW_START:00-$WINDOW_END:00 UTC, cron hours $CRON_HOURS"
+
+      - name: Budget guard
+        id: guard
+        run: |
+          python3 scripts/keepalive_budget.py \
+            --state .github/keepalive-budget.json \
+            --pool "$FREE_HOURS_POOL" \
+            --services 3 \
+            --window-start "$WINDOW_START" --window-end "$WINDOW_END" \
+            >> "$GITHUB_OUTPUT"
+
+      - name: Ping
+        if: steps.guard.outputs.should_ping == 'true' && github.event.inputs.dry_run != 'true'
+        id: ping
+        run: |
+          set +e
+          FAILURES=""
+          ping_one () {
+            NAME="$1"; URL="$2"; ENABLED="$3"
+            [ "$ENABLED" = "1" ] || { echo "$NAME: disabled"; return; }
+            CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 90 "$URL")
+            echo "$NAME: HTTP $CODE ($URL)"
+            # A cold start is a slow 200, not a failure. Anything 2xx/3xx counts.
+            case "$CODE" in
+              2*|3*) ;;
+              *) FAILURES="$FAILURES $NAME" ;;
+            esac
+          }
+          ping_one engine "https://prahari-v2-engine.onrender.com/health/ping" "$PING_ENGINE"
+          ping_one web    "https://prahari-v2-web.onrender.com/api/health"     "$PING_WEB"
+          ping_one v1     "https://prahari-6njh.onrender.com/"                 "$PING_V1"
+          echo "failures=${FAILURES# }" >> "$GITHUB_OUTPUT"
+
+      - name: Record the ping in the budget artifact
+        if: steps.guard.outputs.should_ping == 'true' && github.event.inputs.dry_run != 'true'
+        run: |
+          python3 scripts/keepalive_budget.py \
+            --state .github/keepalive-budget.json \
+            --pool "$FREE_HOURS_POOL" --services 3 \
+            --window-start "$WINDOW_START" --window-end "$WINDOW_END" \
+            --record
+          git config user.name  "prahari-keepalive"
+          git config user.email "keepalive@users.noreply.github.com"
+          git add .github/keepalive-budget.json
+          git diff --staged --quiet || git commit -m "chore(keepalive): budget [skip ci]"
+          git push || echo "::warning::could not push the budget artifact"
+
+      - name: Raise an issue after three consecutive failures
+        # Silent keep-alive failure on demo morning is the exact scenario this
+        # phase exists to prevent, so a repeated failure is LOUD.
+        if: steps.ping.outputs.failures != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const failed = '${{ steps.ping.outputs.failures }}'.trim();
+            const title = 'keep-alive: a target is not answering';
+            const { data: open } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner, repo: context.repo.repo,
+              state: 'open', labels: 'keepalive',
+            });
+            const body = [
+              `Failing targets: **${failed}**`,
+              '',
+              `Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              '',
+              'A cold start is a slow 200 and is NOT counted as a failure, so this',
+              'means the target answered with an error or not at all.',
+            ].join('\n');
+            if (open.length) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: open[0].number, body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner, repo: context.repo.repo,
+                title, body, labels: ['keepalive'],
+              });
+            }
+
+      - name: Report
+        if: always()
+        run: |
+          {
+            echo "### keep-alive"
+            echo ""
+            echo "- decision: \`${{ steps.guard.outputs.should_ping }}\`"
+            echo "- reason: ${{ steps.guard.outputs.reason }}"
+            echo "- budget used: ${{ steps.guard.outputs.used_pct }}% of a ${{ env.FREE_HOURS_POOL }}h pool shared by 3 services"
+            echo "- window: ${{ env.WINDOW_START }}:00–${{ env.WINDOW_END }}:00 UTC"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -42,6 +42,10 @@ npm-debug.log*
 # local editor/tooling state
 .claude/
 
+# runtime caches -- geo lookups and keep-alive accounting, rebuilt on demand
+engine/.cache/
+.cache/
+
 # scratch
 __shot.mjs
 __*.mjs

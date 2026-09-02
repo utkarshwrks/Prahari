@@ -1365,3 +1365,106 @@ every page, and the cockpit is a page.
 **PHASE 6 GATE: GREEN.** Footer on every page, v1 linked with correct `rel` and
 a status dot that reads "waking" for a sleeping service and "unknown" for a
 failed check — never "offline". **DEC-063.**
+
+---
+
+## v2.1 Phase 7 — always-on within the free tier
+
+| Check | Phase 6 | Phase 7 | Result |
+|---|---|---|---|
+| `npm test` | 950 passed | **986 passed** (26 files) | **PASS** |
+| `npm run lint` | clean | clean | **PASS** |
+| `npm run build` | clean | clean | **PASS** |
+| `uv run pytest -q` | 452 passed | **482 passed** / 17 skipped | **PASS** |
+| `journey.mjs` | 137/137 | **147/147** (10 new keep-alive checks) | **PASS** |
+| `npm run warmup` | n/a | **3/3 services awake, 4 caches warmed** | **PASS** |
+| `forge test` | not run | not run | **CONDITION** |
+
+**Total: 1,615 green** (986 web · 482 engine · 147 e2e).
+
+### The figures were verified, and they changed the design
+
+Checked at <https://render.com/docs/free> on 2026-09-03, not remembered:
+**750 hours per workspace per calendar month, shared**; 15-minute spin-down;
+~1-minute cold start; hours consumed only while running.
+
+The playbook assumed two services and ~12 h/day. There are **three**, sharing
+one pool, so the honest window is **seven hours** (`750 × 0.85 ÷ 3 ÷ 30.44 =
+6.98 h/service/day`). The schedule followed the numbers.
+
+### New coverage
+
+| File | Tests | Covers |
+|---|---|---|
+| `test_uptime.py` | 30 | The verified constants as constants (so a change is a visible diff); the arithmetic; window logic including one that wraps midnight; the guard narrowing at 85 % and **stopping at 100 %**; **failing closed** when the budget cannot be computed; awake-time accounting that does not credit a gap longer than the spin-down; **the ping opening no database session and no socket**; < 50 ms; `/health` untouched |
+| `keepalive.test.ts` | 35 | UPTIME.md records where and when the figures were verified and what still needs a human; the cron matches the declared window; the guard's ~7 h/day; **five corrupt-artifact shapes all refuse to ping** while a missing file still does; the guard is stdlib-only; the warm-up polls, reports a failure honestly, and reads milliseconds portably; cross-pinging off |
+| `security.test.ts` | +1 | `ENGINE_URL`'s third reader pinned, plus a new **shape** assertion that every reader is an `app/api/**/route.ts` and none is a client component |
+
+### New e2e coverage — 10 checks
+
+```
+PASS  the engine ping answers
+PASS  it reports uptime, pings and the budget
+PASS  it is fast enough to be a keep-alive — 9 ms round trip
+PASS  the web health endpoint answers
+PASS  it is never cached — no-store, max-age=0
+PASS  the shallow check does NOT call the engine
+PASS  ?deep=1 reaches the engine and reports its latency — engine ok=true 1ms
+PASS  the Command Panel shows a measured uptime card
+PASS  it states the budget is an estimate and names the authority
+PASS  it tells the operator to warm up before a demo
+```
+
+### Three defects found by running the code
+
+1. **The guard failed OPEN.** Its state reader returned `{}` for both a missing
+   file and a corrupt one, so an unreadable artifact made it believe nothing had
+   been spent and ping freely. Exercised deliberately with four malformed
+   shapes; all four now refuse, while a genuinely missing file still allows a
+   first run.
+2. **`date +%s%3N` is GNU-only, and BSD `date` SUCCEEDS** while returning a
+   literal `3N` — so the `|| fallback` never fired and the arithmetic died with
+   *"value too great for base"*. Every cache-warm timing on macOS was garbage.
+   The output is validated instead of the exit status.
+3. **`ENGINE_URL` gained a third reader** (the deep-ping route). Legitimate and
+   server-side, but the INV-2 test was pinned to two — so it caught it, as
+   designed. The list is re-pinned and a second assertion now checks the
+   *shape*: every reader must be a route handler, never a client component.
+
+### `npm run warmup`, measured locally
+
+```
+  engine   awake in   0s  (HTTP 200)
+  web      awake in   0s  (HTTP 200)
+  v1       awake in   1s  (HTTP 200)
+
+  actors index              34ms  (HTTP 200)
+  signals cache             48ms  (HTTP 200)
+  audit ledger              52ms  (HTTP 200)
+  graph stats               76ms  (HTTP 200)
+```
+
+### CONDITION — two facts need the account owner
+
+The Render usage page cannot be read from here; it needs the owner's login, and
+rule 7 says those clicks are the user's. Recorded in `docs/UPTIME.md` as
+conditions rather than assumed:
+
+1. **That the workspace holds exactly three free web services.** Three are
+   visible from this repository. A fourth changes every number.
+2. **The month's consumption to date.** Render is the authority; the committed
+   artifact is a *floor* estimated from our own pings and says so.
+
+If either differs, `--services` in the workflow and the window hours change
+together — and the workflow refuses to run if the cron and the window disagree.
+
+### Verdict
+
+**PHASE 7 GATE: CONDITIONAL PASS.** Everything mechanically verifiable is green,
+`docs/UPTIME.md` is written from figures verified against Render's live
+documentation, and the budget guard is proven to fail closed. The gate's own
+wording — *"both services warm through the whole configured window, measured
+monthly usage inside the free allowance"* — cannot be fully claimed from here:
+it needs a month of real running and the owner's usage page. That is recorded as
+a condition, which is this project's existing convention (DEC-052) and the
+honest verdict. **DEC-064, DEC-065.**

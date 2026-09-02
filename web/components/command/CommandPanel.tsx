@@ -47,7 +47,16 @@ interface ListResponse {
   includes_deleted: boolean;
 }
 
-type Tab = "records" | "analytics" | "activity" | "retention";
+type Tab = "records" | "analytics" | "activity" | "retention" | "uptime";
+
+interface UptimeState {
+  ok: boolean;
+  uptime_s?: number;
+  awake_since?: string;
+  pings_24h?: number;
+  budget_used_pct?: number;
+  next_window?: string;
+}
 
 function Banner({ refusal, onStepUp }: { refusal: AdminRefusal; onStepUp: () => void }) {
   return (
@@ -98,6 +107,7 @@ export default function CommandPanel() {
   const [purge, setPurge] = useState<{ before: string; approver: string; reason: string; preview: unknown }>(
     { before: "2020-01-01", approver: "", reason: "", preview: null }
   );
+  const [uptime, setUptime] = useState<UptimeState | null>(null);
 
   const can = useCallback(
     (permission: string) => Boolean(status?.permissions?.includes(permission)),
@@ -135,6 +145,14 @@ export default function CommandPanel() {
       else setRefusal(o);
       if (s.ok) setSignals(s.data.roots ?? []);
     })();
+  }, [tab]);
+
+  useEffect(() => {
+    if (tab !== "uptime") return;
+    void fetch("/api/engine/health/ping", { cache: "no-store" })
+      .then((r) => r.json())
+      .then(setUptime)
+      .catch(() => setUptime({ ok: false }));
   }, [tab]);
 
   useEffect(() => {
@@ -215,6 +233,7 @@ export default function CommandPanel() {
           ["analytics", "Analytics", Gauge],
           ["activity", "Audit chain", ScrollText],
           ["retention", "Retention", Trash2],
+          ["uptime", "Uptime", Activity],
         ] as const).map(([id, label, Icon]) => (
           <button
             key={id}
@@ -553,6 +572,53 @@ export default function CommandPanel() {
               )}
             </>
           )}
+        </section>
+      )}
+
+      {/* ---- uptime -------------------------------------------------------- */}
+      {tab === "uptime" && (
+        <section className="glass p-3">
+          <h2 className="mono mb-2 flex items-center gap-1.5 text-[10px] uppercase tracking-[0.16em] text-[var(--muted)]">
+            <Activity className="h-3 w-3" /> Keep-alive
+          </h2>
+          <p className="mono mb-2.5 text-[9px] leading-relaxed text-[var(--muted-2)]">
+            Three free Render services share a 750-hour monthly pool, so the schedule is a budgeted
+            seven-hour warm window rather than a ping loop. Every figure below is measured; none is
+            hardcoded. The full arithmetic is in docs/UPTIME.md.
+          </p>
+          {uptime?.ok ? (
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-4" data-testid="uptime-card">
+              {[
+                ["Awake for", `${Math.round((uptime.uptime_s ?? 0) / 60)} min`,
+                 "Since this instance last started."],
+                ["Pings in 24 h", String(uptime.pings_24h ?? 0),
+                 "Keep-alive requests the engine has seen."],
+                ["Budget used", `${uptime.budget_used_pct ?? 0}%`,
+                 "Estimated, of this service's 250-hour share. Render is the authority."],
+                ["Next window", (uptime.next_window ?? "").slice(11, 16) || "—",
+                 "When pinging next resumes, UTC."],
+              ].map(([label, value, hint]) => (
+                <div key={label} className="border border-[var(--border)] bg-[var(--surface-2)] p-2.5">
+                  <p className="mono text-[8.5px] uppercase tracking-[0.16em] text-[var(--muted-2)]">
+                    {label}
+                  </p>
+                  <p className="mono tnum mt-1 text-lg font-bold text-[var(--text)]">{value}</p>
+                  <p className="mono mt-0.5 text-[8.5px] leading-snug text-[var(--muted-2)]">{hint}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mono text-[10px] text-[var(--muted-2)]">
+              {uptime === null
+                ? "Loading…"
+                : "The engine did not answer. It may be cold-starting — allow 30–60 s."}
+            </p>
+          )}
+          <p className="mono mt-2 text-[8.5px] leading-relaxed text-[var(--muted-2)]">
+            Outside the window all three services sleep and consume nothing, and the first request
+            wakes them in about a minute. Run <span className="text-[var(--text)]">npm run warmup</span>
+            {" "}before a demo rather than relying on the schedule.
+          </p>
         </section>
       )}
 

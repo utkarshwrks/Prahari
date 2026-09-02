@@ -149,14 +149,37 @@ describe("INV-2 - the browser never holds the engine URL or a key", () => {
 
   const ADMIN_PROXY = "app/api/admin/[...path]/route.ts";
 
-  it("ENGINE_URL is read in the two server-side proxies and nowhere else", () => {
-    // TWO proxies as of DEC-060, deliberately separate. The read proxy is an
-    // allowlist for signed-in analysts; the admin proxy adds role, CSRF,
-    // step-up, rate limit and a ledger entry. Merging them would mean one
-    // function whose behaviour depends on which arm of a branch it took, and
-    // the failure mode of getting that branch wrong is an unauthenticated purge.
+  const HEALTH_ROUTE = "app/api/health/route.ts";
+
+  it("ENGINE_URL is read only in server-side route handlers, and only in three", () => {
+    /**
+     * Three readers, each a server route, each deliberate:
+     *
+     *   the read proxy   an allowlist for signed-in analysts (INV-2)
+     *   the admin proxy  adds role, CSRF, step-up, rate limit and a ledger
+     *                    entry (DEC-060). Separate from the read proxy on
+     *                    purpose: merging them would mean one function whose
+     *                    behaviour depends on which arm of a branch it took,
+     *                    and the failure mode of that is an unauthenticated
+     *                    purge.
+     *   the health route `?deep=1` wakes the engine in one call (DEC-064)
+     *
+     * Pinned, so a fourth is a reviewed act. The invariant is not "two files"
+     * -- it is that the browser never learns the URL, which the client-bundle
+     * assertions below are what actually prove.
+     */
     const readers = SOURCES.filter((f) => /process\.env\.ENGINE_URL/.test(read(f)));
-    expect(readers.map(rel).sort()).toEqual([ADMIN_PROXY, PROXY].sort());
+    expect(readers.map(rel).sort()).toEqual([ADMIN_PROXY, HEALTH_ROUTE, PROXY].sort());
+  });
+
+  it("every ENGINE_URL reader is a route handler, never a component", () => {
+    // The shape of the mistake, not just the list: a component reading it
+    // would put the engine's URL in a client bundle.
+    const readers = SOURCES.filter((f) => /process\.env\.ENGINE_URL/.test(read(f)));
+    for (const f of readers) {
+      expect(rel(f), rel(f)).toMatch(/^app\/api\/.*\/route\.ts$/);
+      expect(read(f), rel(f)).not.toMatch(/^["']use client["']/m);
+    }
   });
 
   it("the read proxy cannot reach the admin scope", () => {

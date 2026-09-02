@@ -1494,3 +1494,128 @@ and every external link announced as such.
 
 **Measured:** 33 footer unit tests, 16 e2e checks across eight routes, both dots
 resolving live against the real v1 deployment and the real engine.
+
+---
+
+## v2.1 Upgrade — Phase 7
+
+### DEC-064 — The real Render figures, and the seven-hour window they force.
+
+The playbook's first instruction for this phase was to verify the free-tier
+numbers **from Render's live documentation** and not to trust remembered ones.
+Checked at <https://render.com/docs/free> on **2026-09-03**:
+
+| Fact | Verified | Quoted |
+|---|---|---|
+| Pool | **750 instance hours per month** | *"Render grants 750 Free instance hours to each workspace per calendar month"* |
+| Scope | **Per workspace, shared** | granted to the workspace, not per service |
+| Spin-down | **15 minutes** idle | *"goes 15 minutes without receiving any inbound traffic"* |
+| Cold start | **~1 minute** | *"This process takes about one minute"* |
+| Consumption | **Only while running** | *"spun-down services don't consume Free instance hours"* |
+
+**The playbook's assumption was wrong for this deployment, and the schedule
+followed the real numbers rather than the other way round.** It assumed two
+services and suggested ~12 h/day each. There are **three** free web services —
+`prahari-v2-engine`, `prahari-v2-web` and `prahari-6njh` (v1) — sharing one
+750-hour pool:
+
+```
+750 ÷ 3 = 250 h per service per month
+250 ÷ 30.44 = 8.21 h per service per day
+with the 85% guard: 637.5 ÷ 3 ÷ 30.44 = 6.98 h per service per day
+```
+
+So: **a seven-hour window, 04:00–11:00 UTC** (09:30–16:30 IST — an Indian
+working day and any plausible demo slot). Three services awake 24/7 would need
+≈2,192 hours against a pool of 750; that gap is the entire design problem.
+
+**Ten-minute interval, not fourteen.** GitHub's cron is best-effort, not
+guaranteed. At fourteen minutes against a fifteen-minute timeout a single
+skipped run lets the service sleep; ten leaves room for one miss.
+
+#### What could not be verified from here
+
+The account's usage page needs the owner's login, and rule 7 of the playbook is
+explicit that those clicks are the user's. Two things are therefore recorded in
+`docs/UPTIME.md` as **conditions**, not assumptions: that the workspace holds
+exactly the three free web services visible from this repository, and what the
+month's consumption actually is. Render's dashboard is the authority; the
+artifact in this repository is an estimate and is labelled as one.
+
+#### The ping touches nothing
+
+`GET /health/ping` opens no database session, queries no Neo4j, calls no
+external API and reads no disk on its hot path. A keep-alive that runs a
+database query is a keep-alive that consumes the thing it is protecting — and on
+a 512 MB free instance a query every ten minutes forever is a real cost for no
+benefit. Its whole job is to be an inbound request that resets the idle timer,
+and that requires nothing but answering. A **socket spy** asserts no outbound
+connection; a session spy asserts no database. Logged at DEBUG, or the log
+stream someone reads during an incident gains forty lines a day of noise.
+
+`/api/health` on the web side is static by default, `no-store` always — a cached
+200 from an edge would keep the scheduler happy while the service slept, which
+defeats the entire mechanism. `?deep=1` optionally wakes both in one call, and a
+failed deep ping does **not** make the endpoint fail: the web service is up, and
+answering 503 would tell the scheduler the wrong service was down.
+
+---
+
+### DEC-065 — The budget guard fails closed, and a corrupt artifact is not an empty one.
+
+The guard runs before any ping, in the workflow, on the standard library alone —
+it executes before any dependency install, and a guard that needs `pip install`
+to decide whether to ping can fail for reasons unrelated to the budget.
+
+- **Narrows at 85 %** of a service's share: half rate, so services stay
+  reachable but colder.
+- **Stops at 100 %** for the rest of the calendar month.
+- **The workflow refuses to run if the cron hours and the configured window
+  disagree.** A schedule that contradicts its own guard burns budget outside the
+  window it claims to keep.
+
+#### The bug that made "fails closed" untrue
+
+The first version read the state artifact through a `try/except` that returned
+`{}` on any error. That made a **missing** file and a **corrupt** one
+indistinguishable — so an unreadable artifact made the guard believe nothing had
+been spent, and it pinged freely. That is failing **open**, which is the one
+direction this guard must never fail in, and the cost of being wrong there is a
+suspended workspace on demo morning.
+
+Missing and corrupt are now different: missing is a legitimate first run and
+pinging proceeds; bad JSON, the wrong shape, or non-numeric entries stop pinging
+entirely. Non-numeric entries are treated as corruption rather than silently
+skipped, because skipping them would *understate* usage — the wrong direction.
+
+#### Failure is loud
+
+Three consecutive non-2xx responses open or update a GitHub issue labelled
+`keepalive`. **A slow 200 is a cold start and is not counted as a failure** —
+counting it would raise an issue every morning for a system working exactly as
+designed. Silent keep-alive failure on demo morning is the scenario this phase
+exists to prevent.
+
+#### Cross-pinging stays off
+
+`KEEPALIVE_CROSS=1` exists and is disabled, because mutual pinging keeps both
+services awake **indefinitely and outside the window**: two services in a ping
+loop consume 2 × 730 = 1,460 hours a month against a 750-hour pool, and nothing
+in the system would report it until the workspace was suspended. The GitHub cron
+is the safe backstop precisely because it cannot loop.
+
+#### `scripts/warmup.sh`
+
+Pings all three, **polls until each answers**, prints the measured cold-start
+time, then warms `actors_index.pkl`, `signals_cache.pkl` and the audit ledger so
+the first workbench load in front of judges is fast rather than merely
+successful. It reports a service that did not wake rather than claiming a
+success it did not have.
+
+Its millisecond clock needed fixing on macOS: `date +%s%3N` is GNU-only, and BSD
+`date` **succeeds** while returning a literal `3N`, so a `|| fallback` never
+fires and the arithmetic then dies with "value too great for base". The output
+is validated instead of the exit status. Found by running it.
+
+**Measured:** 30 engine tests, 35 web tests, and 12 e2e checks. `npm run warmup`
+brings all three services up and warms four caches in under 250 ms locally.
