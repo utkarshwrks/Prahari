@@ -54,22 +54,85 @@ and the pool is shared, so:
 is 750. That is the whole design problem, and it is why the answer is a budgeted
 warm window rather than a ping loop.
 
+### What the arithmetic does NOT allow, stated plainly
+
+Even two services awake around the clock need 2 × 730 = **1,460 hours** against
+a pool of 750. **No schedule keeps these services up 24/7 on the free tier** —
+not a shorter ping interval, not a cleverer cron. Anything claiming otherwise is
+either burning someone else's budget or lying. Ten hours a day is the honest
+maximum, and outside the window the UI says a cold start is coming rather than
+pretending the service is warm.
+
+### The divisor is the lever, not the interval
+
+The single most useful thing to understand here: **Render bills hours awake, not
+requests.** Pinging every 5 minutes and pinging every 10 minutes keep a service
+awake for exactly the same number of hours and therefore cost exactly the same.
+The interval only decides how reliably the service *stays* awake.
+
+What actually costs budget is `window length × services kept warm`. So the way
+to buy a longer window is to keep fewer services warm:
+
+```
+  3 services (engine + web + v1):  637.5 ÷ 3 ÷ 30.44 =  6.98 h/day each
+  2 services (engine + web):       637.5 ÷ 2 ÷ 30.44 = 10.47 h/day each
+```
+
+v1 is a standalone demo that nobody is mid-investigation on, so it is **opt-in**
+(`PING_V1=0`). That single change buys engine and web a ten-hour window instead
+of a seven-hour one. Set `PING_V1=1` **and** `KEPT_WARM=3`, and narrow the cron
+to match, to put it back.
+
 ### The window
 
-**04:00–11:00 UTC — seven hours a day.**
+**03:00–13:00 UTC — ten hours a day.**
 
-- Seven hours fits inside the 6.98 h guarded budget with the month's rounding
-  absorbing the difference.
-- 04:00–11:00 UTC is **09:30–16:30 IST**: an Indian working day and any
-  plausible demo slot.
-- Outside it, all three services sleep and consume nothing. The UI says so
-  rather than pretending they are warm.
+- Ten hours fits inside the 10.47 h guarded two-service budget.
+- 03:00–13:00 UTC is **08:30–18:30 IST**: a full Indian working day, and any
+  plausible demo or judging slot.
+- Outside it the services sleep and consume nothing. The UI says so rather than
+  pretending they are warm.
 
 ### The interval
 
-**Ten minutes**, against a fifteen-minute timeout. Not fourteen: GitHub's cron
-is best-effort, not guaranteed, and at a fourteen-minute interval a single
-skipped run lets the service sleep. Ten leaves room for one miss.
+**Five minutes**, against a fifteen-minute timeout.
+
+The interval is free (see above), so it is chosen purely for reliability. At ten
+minutes, one skipped run leaves a 20-minute gap and the service sleeps; GitHub's
+scheduled workflows are explicitly best-effort and are routinely delayed by
+several minutes under load. At five minutes, **two** consecutive runs can be
+missed entirely and the service still stays up.
+
+---
+
+## 2b. Why a woken service can still feel slow
+
+Waking the process is not the same as making it fast, and conflating the two is
+why "it works locally but the deployed one is slow" persists after a keep-alive
+is added. There are **three** distinct delays:
+
+| Delay | Duration | Fixed by |
+|---|---|---|
+| **Cold start** — the instance is asleep and must boot | 30–60 s | the ping window |
+| **Cold caches** — the instance is up but `build_signals()`, the calibrator and the actors index are unbuilt | ~20 s on the first real call | `POST /health/warm` |
+| **A dependency is down** — Neo4j or an upstream is unreachable | varies | `GET /health/diagnostics` names which |
+
+The keep-alive ping deliberately fixes only the first. `GET /health/ping` must
+stay under 50 ms and touch nothing, so it cannot warm anything — a ping that
+rebuilt caches every five minutes would burn CPU continuously for no benefit.
+
+So the workflow calls `POST /health/warm` **once, at the top of the window**.
+That builds all three caches before any human arrives, which is what makes the
+first request of the day as fast as a local run.
+
+`GET /health/diagnostics` reports which of the three is currently true, and it
+found a real bug when it was written: the engine's startup routine warmed
+`build_signals()` and the calibrator but **not the actors index**, so every cold
+start rebuilt that index on the first `/actors` call — the first call the
+workbench, the actor list and SANGAM all make. The engine reported itself warm
+while the product felt slow. See DEC-066.
+
+---
 
 ---
 

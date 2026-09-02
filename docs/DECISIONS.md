@@ -1619,3 +1619,169 @@ is validated instead of the exit status. Found by running it.
 
 **Measured:** 30 engine tests, 35 web tests, and 12 e2e checks. `npm run warmup`
 brings all three services up and warms four caches in under 250 ms locally.
+
+---
+
+## Phase 8 — hardening, accessibility, and the cold-start problem
+
+### DEC-066 · The actors index was never warmed at startup
+
+**The complaint:** "on deploy the live data is slow; locally it is instant."
+
+The keep-alive built in Phase 7 wakes the instance, so the obvious diagnosis —
+cold start — was already handled. The complaint persisted, which meant the
+diagnosis was wrong or incomplete.
+
+Writing `GET /health/diagnostics` found it. Fifteen seconds after boot, on an
+engine reporting itself healthy:
+
+```
+verdict: cold-start
+caches : {'signals': True, 'actors_index': False}
+```
+
+`engine/main.py`'s startup routine warmed `build_signals()` and
+`ensure_calibrated()` and stopped there. **The actors index was not in the
+list** — and `/actors` is the first call the workbench, the actor list and
+SANGAM Pro all make. So every cold start paid to rebuild that index on the first
+request a human made, while the health check said the engine was warm.
+
+It is the same class of bug as DEC-054, one cache along. Fixed by warming
+`list_actors()` in the same routine. Measured after the fix: first `/actors`
+call **10 ms**, first `/fusion/metrics` **23 ms**.
+
+There is a test that fails if `list_actors` leaves that routine again.
+
+### DEC-066a · Warmth is read from `cache_info()`, not a module global
+
+The first draft of the diagnostics read `getattr(eval, "_SIGNALS", None)` and
+`getattr(actors, "_INDEX", None)`. **Neither global exists** — both functions
+are `@lru_cache(maxsize=1)` — so the endpoint would have reported every cache as
+cold forever.
+
+A diagnostic that is always wrong is worse than no diagnostic: it sends you
+looking in the wrong place with confidence. `build_signals.cache_info().currsize`
+is the real answer and reading it does no work, which matters — a diagnostic that
+warms what it measures can never report a cold cache. Both properties are tested.
+
+### DEC-067 · The ping interval is free; the divisor is the lever
+
+Render bills **hours awake, not requests**. Pinging every 5 minutes and every 10
+minutes keep a service awake for identical hours and cost identically. The
+interval only decides how reliably the service *stays* awake — so it was set to
+**five minutes**, which survives two consecutive missed cron runs against a
+15-minute timeout. GitHub's scheduled workflows are best-effort and routinely
+late; this costs nothing and removes a whole failure mode.
+
+What actually costs budget is `window length × services kept warm`:
+
+```
+  3 services (engine + web + v1):  637.5 ÷ 3 ÷ 30.44 =  6.98 h/day each
+  2 services (engine + web):       637.5 ÷ 2 ÷ 30.44 = 10.47 h/day each
+```
+
+So v1 became **opt-in** (`PING_V1=0`), which buys engine and web a **ten-hour**
+window (03:00–13:00 UTC = 08:30–18:30 IST) instead of seven.
+
+**What is still impossible, stated plainly:** two services awake 24/7 need
+2 × 730 = 1,460 hours against a pool of 750. No schedule achieves that on the
+free tier. Ten hours a day is the honest maximum, and outside the window the UI
+says a cold start is coming rather than pretending otherwise (INV-5, INV-12).
+
+### DEC-068 · Warming is once per window, not once per ping
+
+`GET /health/ping` must stay under 50 ms and touch nothing — a ping that rebuilt
+caches every five minutes would burn CPU continuously on a free instance for no
+benefit. So `POST /health/warm` is a **separate** call the workflow makes once,
+at the top of the window, before any human arrives. A test asserts the ping
+handler contains none of `build_signals`, `ensure_calibrated` or `list_actors`.
+
+### DEC-069 · Three delays, named separately
+
+"Slow" was one word covering three unrelated problems, which is why it survived
+a fix. `GET /health/diagnostics` reports which is true:
+
+| Delay | Duration | Fixed by |
+|---|---|---|
+| Cold start — instance asleep | 30–60 s | the ping window |
+| Cold caches — up but unbuilt | ~20 s on first call | `POST /health/warm` |
+| A dependency is down | varies | the diagnostics name it |
+
+### DEC-070 · The image optimizer is disabled rather than left reachable
+
+`npm audit` reported 2 critical, 2 high and 3 moderate. `npm audit fix` plus
+`jspdf@^4.2.1` cleared the critical and moderate. The two remaining **high**
+advisories are in Next 14 itself and need a 14 → 16 major upgrade, which is not
+an additive change and would violate the prime directive this late.
+
+The reachable one is the image optimizer, so `images: { unoptimized: true }` is
+set instead. Verified: `/_next/image` went from **400 to 404** — the endpoint is
+gone, not merely erroring. No image in this build was being optimized anyway;
+they are SVG and inline.
+
+### DEC-071 · `--muted-2` failed WCAG AA in all six skins
+
+axe-core, injected into a real browser across 17 routes, found the same serious
+violation everywhere: the secondary muted token did not reach 4.5:1.
+
+The first fix solved the contrast against `--surface` and **still failed** on
+lighter panels. The token is drawn on `--elevated` too, so it must be solved
+against the lightest background it ever sits on:
+
+```
+  ember   #645C58 → #918985      plasma  #6E5C82 → #9684AA
+  abyss   #556278 → #818EA4      solar   #786957 → #9B8C7A
+  verdant #557060 → #839E8E      arctic  #5A7080 → #8197A7
+  :root   #63636E → #8E8E98
+```
+
+Also fixed: Leaflet divIcon markers get `role="button"` and `tabindex="0"` from
+Leaflet but no accessible name, so a screen reader announced them as "button" —
+`title` is what Leaflet puts on the container and serves as that name. And three
+`<dl>` structures had a `<p>` where a `<dd>` belonged.
+
+**Result: 17/17 routes clean of serious and critical violations.**
+
+### DEC-071a · The `/command` scroll regions were keyboard-unreachable
+
+A later axe run — after the records table had enough rows to actually scroll —
+caught `scrollable-region-focusable` on `/command`. Two `overflow-auto` panels
+contained no focusable child, so a mouse user could scroll them and a keyboard
+user could not see past the first screenful at all.
+
+`tabIndex={0}` puts the region in the tab order; `role="region"` with a label
+means a screen reader announces what was entered. Worth recording that the
+violation only appeared once the panel had content — a scan of an empty page
+would have missed it, which is why the axe suite drives real routes with real
+data rather than static markup.
+
+### DEC-072 · A 404 means awake, and a 404 on a health path means stale
+
+`scripts/warmup.sh` waited out its full 150-second deadline and reported
+**NOT AWAKE (last HTTP 404)** for services that were up and answering. That is
+the same error DEC-063 rejected for the footer's status dot, in a different
+file: a response — any response — proves the service is awake.
+
+Running it against the live deployment is what exposed this, and the 404 turned
+out to be telling the truth about something else:
+
+```
+  engine   awake in   0s  (HTTP 404 — health endpoint MISSING; this deploy is behind)
+  web      awake in   1s  (HTTP 404 — health endpoint MISSING; this deploy is behind)
+  v1       awake in   0s  (HTTP 200)
+```
+
+**The deployed services are running code that predates Phase 7.** Awake-but-stale
+is a third state, distinct from awake and from asleep, and it is the one that
+matters most here: the keep-alive cannot keep anything alive against a deploy
+with no `/health/ping`. So the script now reports it explicitly rather than
+either failing (wrong — they answered) or passing quietly (worse — it hides the
+reason the keep-alive is not working).
+
+Two smaller fixes in the same pass, both found by running it:
+
+- `warm()` ignored a method argument, so `/health/warm` was sent as a GET and
+  returned **405** — printed as though something had been warmed.
+- The script read `BASE_ENGINE`/`BASE_WEB` only, while `ENGINE_URL` is the name
+  used everywhere else in the project. Passing `ENGINE_URL` warmed the *deployed*
+  engine while appearing to warm localhost. Both names are accepted now.

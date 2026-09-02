@@ -55,14 +55,34 @@ async def lifespan(app: FastAPI):
     # Warming in a thread keeps boot fast while making the first real request
     # fast too.
     def _warm() -> None:
+        warmed: list[str] = []
         try:
             from .fusion import eval as _eval
 
             _eval.build_signals()
+            warmed.append("signals")
             _eval.ensure_calibrated()
-            log.info("caches warmed")
+            warmed.append("calibrator")
+
+            # THE ACTORS INDEX WAS MISSING FROM THIS LIST.
+            #
+            # Found by /health/diagnostics, which reported `actors_index: cold`
+            # on an engine that had been up for fifteen seconds and reported
+            # itself warm. Every cold start therefore rebuilt the index on the
+            # first /actors call -- which is the FIRST call the workbench, the
+            # actor list and SANGAM all make, so the whole product felt slow
+            # after every spin-up while a local run felt instant.
+            #
+            # It is the same class of bug as DEC-054, one cache along.
+            from .engines import actors as _actors
+
+            _actors.list_actors("", 1, 0, 0.0)
+            warmed.append("actors_index")
+
+            log.info("caches warmed", extra={"caches": warmed})
         except Exception:  # noqa: BLE001 - warming is an optimisation, never fatal
-            log.warning("cache warm failed; first request will be slow")
+            log.warning("cache warm incomplete; first request will be slow",
+                        extra={"warmed": warmed})
 
     threading.Thread(target=_warm, name="warm", daemon=True).start()
 

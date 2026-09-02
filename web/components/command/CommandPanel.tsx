@@ -289,7 +289,20 @@ export default function CommandPanel() {
                 : "No data."}
           </p>
 
-          <div className="slim max-h-[52vh] overflow-auto">
+          {/*
+            A scrollable region with no focusable child is unreachable by
+            keyboard: a mouse user scrolls it, a keyboard user cannot see past
+            the first screenful at all. axe reports this as serious, and it is.
+            `tabIndex={0}` puts the region itself in the tab order so arrow keys
+            scroll it; `role="region"` plus a label mean a screen reader
+            announces what was just entered rather than an unnamed group.
+          */}
+          <div
+            className="slim max-h-[52vh] overflow-auto"
+            tabIndex={0}
+            role="region"
+            aria-label="Records, scrollable"
+          >
             <table className="w-full border-collapse">
               <thead className="sticky top-0 bg-[var(--surface)]">
                 <tr className="mono text-[8.5px] uppercase tracking-[0.14em] text-[var(--muted-2)]">
@@ -455,7 +468,13 @@ export default function CommandPanel() {
             Read from the chain itself, not from a parallel log that could disagree with it. Every
             entry is hash-linked to the one before and signed.
           </p>
-          <div className="slim max-h-[52vh] overflow-auto">
+          {/* Same reasoning as the records table above. */}
+          <div
+            className="slim max-h-[52vh] overflow-auto"
+            tabIndex={0}
+            role="region"
+            aria-label="Audit chain, scrollable"
+          >
             <ul className="space-y-1" data-testid="audit-records">
               {activity.map((r) => (
                 <li

@@ -23,7 +23,7 @@
 
   --text:      #EDEDF0;
   --muted:     #9A9AA6;
-  --muted-2:   #63636E;
+  --muted-2:   #8E8E98;
 
   --accent:    #E8503A;
   --accent-2:  #D9A441;
@@ -75,41 +75,57 @@
   --ent-infra:   #9b7fd8;
 }
 
-/* ---- skins ------------------------------------------------------------- */
+/* ---- skins -------------------------------------------------------------
+
+   NOTE on --muted-2 (Phase 8 accessibility pass).
+
+   Every skin's --muted-2 failed WCAG AA against its own --surface: measured at
+   2.83:1 (ember) to 3.53:1 (solar), against a 4.5:1 requirement. axe-core
+   reported it as a SERIOUS violation on fourteen of seventeen routes, and it
+   predates this upgrade -- it is in the original palette.
+
+   Each value below is the lightest colour that reaches 4.5:1 against the
+   LIGHTEST background that skin draws it on -- `--elevated`, not `--surface`.
+   Solving against --surface alone left it failing on panels and cards, which
+   the second axe run caught. Computed rather than eyeballed, so the tokens stay
+   as close to the intended mood as the requirement allows. --muted-2 is a
+   DECORATIVE token: DEC-055 permits a skin to redefine it, and no semantic
+   --sig-* or --ent-* token is touched.
+   ------------------------------------------------------------------------ */
 
 html[data-skin="ember"] {
   --bg:#0B0B0E; --bg-2:#070709; --surface:#131318; --surface-2:#1A1A21; --elevated:#232330;
-  --border:#24242C; --border-2:#38323A; --text:#F1ECEA; --muted:#9C948F; --muted-2:#645C58;
+  --border:#24242C; --border-2:#38323A; --text:#F1ECEA; --muted:#9C948F; --muted-2:#918985;
   --accent:#F05A3E; --accent-2:#E7A548; --accent-dim:#8E3324; --c-low:#6B5F63;
   --radius:3px; --radius-lg:6px; --font-disp:var(--font-display);
 }
 html[data-skin="abyss"] {
   --bg:#070B14; --bg-2:#04070E; --surface:#0D1524; --surface-2:#121C31; --elevated:#182642;
-  --border:#1A2740; --border-2:#274069; --text:#E6EDF8; --muted:#8C9BB8; --muted-2:#556278;
+  --border:#1A2740; --border-2:#274069; --text:#E6EDF8; --muted:#8C9BB8; --muted-2:#818EA4;
   --accent:#3FBEF8; --accent-2:#818CF8; --accent-dim:#255f86; --c-low:#4E6180;
   --radius:6px; --radius-lg:12px; --font-disp:var(--font-display-c);
 }
 html[data-skin="verdant"] {
   --bg:#07110D; --bg-2:#040A07; --surface:#0D1A14; --surface-2:#12241B; --elevated:#173626;
-  --border:#173224; --border-2:#245039; --text:#E7F3EC; --muted:#8DB39D; --muted-2:#557060;
+  --border:#173224; --border-2:#245039; --text:#E7F3EC; --muted:#8DB39D; --muted-2:#839E8E;
   --accent:#37D399; --accent-2:#A3E635; --accent-dim:#1e7b59; --c-low:#4E7A66;
   --radius:5px; --radius-lg:10px; --font-disp:var(--font-display-b);
 }
 html[data-skin="plasma"] {
   --bg:#0B0710; --bg-2:#07040B; --surface:#150E1E; --surface-2:#1E1429; --elevated:#2C1E3B;
-  --border:#241a32; --border-2:#3f2b57; --text:#F0EAF6; --muted:#AB9BC0; --muted-2:#6E5C82;
+  --border:#241a32; --border-2:#3f2b57; --text:#F0EAF6; --muted:#AB9BC0; --muted-2:#9684AA;
   --accent:#C084FC; --accent-2:#F472B6; --accent-dim:#7c3aad; --c-low:#6E5C82;
   --radius:8px; --radius-lg:16px; --font-disp:var(--font-display-c);
 }
 html[data-skin="solar"] {
   --bg:#0E0A06; --bg-2:#090603; --surface:#17110A; --surface-2:#221810; --elevated:#33260f;
-  --border:#2a2013; --border-2:#4d3a1f; --text:#F5ECE0; --muted:#B3A48F; --muted-2:#786957;
+  --border:#2a2013; --border-2:#4d3a1f; --text:#F5ECE0; --muted:#B3A48F; --muted-2:#9B8C7A;
   --accent:#FB923C; --accent-2:#FBBF24; --accent-dim:#a85a1a; --c-low:#7A6A55;
   --radius:2px; --radius-lg:4px; --font-disp:var(--font-display);
 }
 html[data-skin="arctic"] {
   --bg:#080C10; --bg-2:#04070A; --surface:#101820; --surface-2:#16222D; --elevated:#1e2f3d;
-  --border:#1a2731; --border-2:#294050; --text:#E8F0F5; --muted:#93A7B5; --muted-2:#5A7080;
+  --border:#1a2731; --border-2:#294050; --text:#E8F0F5; --muted:#93A7B5; --muted-2:#8197A7;
   --accent:#22D3EE; --accent-2:#60A5FA; --accent-dim:#177f8f; --c-low:#4E6980;
   --radius:5px; --radius-lg:10px; --font-disp:var(--font-display-b);
 }

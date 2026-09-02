@@ -23,7 +23,11 @@ v1 geofence/Jabalpur console has been fully removed.
 - Document pack generator (`scripts/gen_docs.cjs`).
 
 ## Tests
-256 engine tests · 12 Solidity tests · web tests · strict typechecks.
+**493 engine tests · 991 web tests · 17/17 routes clean under axe-core (WCAG
+2.1 AA, serious + critical) · e2e journey · strict typechecks.**
+
+12 Solidity tests exist but `forge` is not installed in this environment, so
+they have not been run here. Stated rather than implied.
 
 ## Pending (user-gated)
 - Fund the anchorer wallet (`0x31EdD0021A09f0B32f7dfeb08B58622c75591991`) from a

@@ -45,7 +45,8 @@ export default function Hero({ metrics }: { metrics: { label: string; value: str
             <dt className="mono mt-1 text-[9px] uppercase tracking-[0.14em] text-[var(--muted)]">
               {m.label}
             </dt>
-            <p className="mono mt-1 text-[9px] leading-relaxed text-[var(--muted-2)]">{m.note}</p>
+            {/* A second <dd>, not a <p> — see app/page.tsx. */}
+            <dd className="mono mt-1 text-[9px] leading-relaxed text-[var(--muted-2)]">{m.note}</dd>
           </div>
         ))}
       </dl>

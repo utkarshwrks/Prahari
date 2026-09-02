@@ -38,7 +38,7 @@ function stateFile(contents: string): string {
   return p;
 }
 
-const BASE = ["--pool", "750", "--services", "3"];
+const BASE = ["--pool", "750", "--services", "2"];
 const ALWAYS_OPEN = ["--window-start", "0", "--window-end", "24"];
 
 describe("the verified figures are recorded, not remembered", () => {
@@ -66,22 +66,61 @@ describe("the verified figures are recorded, not remembered", () => {
   it("shows the arithmetic rather than asserting a conclusion", () => {
     expect(UPTIME_DOC).toContain("750 h/month ÷ 3 services");
     expect(UPTIME_DOC).toContain("6.98");
+    expect(UPTIME_DOC).toContain("10.47");
     // And states that it contradicts the playbook's assumption.
     expect(UPTIME_DOC).toMatch(/playbook assumed two services/i);
+  });
+
+  it("states plainly that 24/7 is impossible on the free tier", () => {
+    // The honest answer to "keep it always awake". Two services need 1,460
+    // hours against a pool of 750; no schedule fixes that.
+    expect(UPTIME_DOC).toContain("1,460 hours");
+    expect(UPTIME_DOC).toMatch(/no schedule|impossible|cannot/i);
   });
 });
 
 describe("the workflow", () => {
-  it("pings every ten minutes, not every fourteen", () => {
-    // GitHub's cron is best-effort. At fourteen minutes one skipped run lets
-    // the service sleep; ten leaves room for a miss.
-    expect(WORKFLOW).toContain('cron: "*/10');
+  it("pings every FIVE minutes", () => {
+    // The interval costs nothing: Render bills hours awake, not requests, so
+    // 5-minute pings keep a service up for exactly the same hours as
+    // 10-minute pings and simply survive more missed runs. GitHub's cron is
+    // best-effort and routinely late; five leaves room for TWO misses against
+    // a 15-minute idle timeout.
+    expect(WORKFLOW).toContain('cron: "*/5');
   });
 
-  it("only runs inside the declared window", () => {
-    expect(WORKFLOW).toContain("*/10 4,5,6,7,8,9,10 * * *");
-    expect(WORKFLOW).toContain('WINDOW_START: "4"');
-    expect(WORKFLOW).toContain('WINDOW_END: "11"');
+  it("only runs inside the declared ten-hour window", () => {
+    expect(WORKFLOW).toContain("*/5 3,4,5,6,7,8,9,10,11,12 * * *");
+    expect(WORKFLOW).toContain('WINDOW_START: "3"');
+    expect(WORKFLOW).toContain('WINDOW_END: "13"');
+  });
+
+  it("declares how many services share the pool, and uses it in the guard", () => {
+    // The divisor is what sets the window length, so it is named once and
+    // referenced -- not written as a literal 3 in the guard call that a later
+    // edit to PING_V1 would silently contradict.
+    expect(WORKFLOW).toContain('KEPT_WARM: "2"');
+    expect(WORKFLOW).toContain('--services "$KEPT_WARM"');
+    expect(WORKFLOW).not.toMatch(/--services 3/);
+  });
+
+  it("takes v1 out of rotation to buy the other two a longer window", () => {
+    // 3 services = 6.98 h/day each; 2 = 10.47. v1 is a demo nobody is
+    // mid-investigation on, so it is the one that gives way.
+    expect(WORKFLOW).toContain('PING_V1: "0"');
+    expect(WORKFLOW).toContain("OPT-IN");
+  });
+
+  it("warms the engine caches at the top of the window", () => {
+    // The user-visible complaint was that live data is slow after a sleep.
+    // Waking the process is not enough -- its caches are still cold, which is
+    // another ~20 s on the first real call.
+    expect(WORKFLOW).toContain("/health/warm");
+    expect(WORKFLOW).toContain("Warm the engine caches");
+    // And warming is NOT part of the every-5-minute ping, which must stay cheap.
+    const warmIdx = WORKFLOW.indexOf("Warm the engine caches");
+    const block = WORKFLOW.slice(warmIdx, warmIdx + 1200);
+    expect(block).toContain("ONCE per window opening");
   });
 
   it("refuses to run if the cron and the window disagree", () => {
@@ -130,19 +169,28 @@ describe("the workflow", () => {
 });
 
 describe("the budget guard", () => {
-  it("computes ~7 hours a day for three services", () => {
+  it("computes ~10.5 hours a day for two services", () => {
     const out = runGuard(["--state", stateFile('{"pings":[]}'), ...BASE, ...ALWAYS_OPEN]);
+    expect(Number(out.daily_budget_hours)).toBeGreaterThan(10);
+    expect(Number(out.daily_budget_hours)).toBeLessThan(11);
+    expect(out.share_hours).toBe("375");
+  });
+
+  it("computes ~7 hours a day if v1 is put back in rotation", () => {
+    const out = runGuard([
+      "--state", stateFile('{"pings":[]}'),
+      "--pool", "750", "--services", "3", ...ALWAYS_OPEN,
+    ]);
     expect(Number(out.daily_budget_hours)).toBeGreaterThan(6.5);
     expect(Number(out.daily_budget_hours)).toBeLessThan(7.5);
-    expect(out.share_hours).toBe("250");
   });
 
   it("gives two services a bigger share than three", () => {
-    const three = runGuard(["--state", stateFile('{"pings":[]}'), ...BASE, ...ALWAYS_OPEN]);
-    const two = runGuard([
+    const three = runGuard([
       "--state", stateFile('{"pings":[]}'),
-      "--pool", "750", "--services", "2", ...ALWAYS_OPEN,
+      "--pool", "750", "--services", "3", ...ALWAYS_OPEN,
     ]);
+    const two = runGuard(["--state", stateFile('{"pings":[]}'), ...BASE, ...ALWAYS_OPEN]);
     expect(Number(two.daily_budget_hours)).toBeGreaterThan(Number(three.daily_budget_hours));
   });
 
@@ -152,10 +200,12 @@ describe("the budget guard", () => {
   });
 
   it("does not ping outside the window", () => {
+    const hour = new Date().getUTCHours();
+    // A one-hour window that is definitely not now.
+    const start = (hour + 5) % 24;
     const out = runGuard([
       "--state", stateFile('{"pings":[]}'), ...BASE,
-      // A window that is open for one hour it is almost certainly not.
-      "--window-start", "3", "--window-end", "4",
+      "--window-start", String(start), "--window-end", String((start + 1) % 24),
     ]);
     // Either it is outside (the overwhelmingly likely case) or the test is
     // running in that single hour; both are correct behaviour.
@@ -164,8 +214,8 @@ describe("the budget guard", () => {
 
   it("STOPS at a hundred percent of the share", () => {
     const now = Date.now() / 1000;
-    // 250 h of share at 600 s credited per ping needs 1500 pings; use more.
-    const pings = Array.from({ length: 1700 }, (_, i) => now - (1700 - i) * 600);
+    // 375 h of share at 600 s credited per ping needs 2250 pings; use more.
+    const pings = Array.from({ length: 2500 }, (_, i) => now - (2500 - i) * 600);
     const out = runGuard([
       "--state", stateFile(JSON.stringify({ month: monthKey(), pings })),
       ...BASE, ...ALWAYS_OPEN,
@@ -248,6 +298,42 @@ describe("the warm-up script", () => {
     // `|| fallback` never fires. Found by running this on macOS.
     expect(WARMUP).toContain("now_ms");
     expect(WARMUP).toContain("*[!0-9]*");
+  });
+
+  it("treats an HTTP answer as awake, not as death", () => {
+    // A 404 means the service is UP and said "no such path". Waiting out the
+    // 150 s deadline on it reports a running service as dead -- the same error
+    // DEC-063 rejected for the footer's status dot. Found by running this
+    // against the live deployment, which answered 404 because it predates the
+    // health endpoints.
+    expect(WARMUP).toContain("4*|5*)");
+    expect(WARMUP).toContain("SOMETHING ANSWERED");
+  });
+
+  it("says a 404 on a health path means the deploy is BEHIND", () => {
+    // Awake-but-stale is a different problem from asleep, and the keep-alive
+    // cannot work against a deploy with no /health/ping. Calling it plain
+    // "awake" would hide that.
+    expect(WARMUP).toContain("health endpoint MISSING");
+    expect(WARMUP).toContain("this deploy is behind");
+    expect(WARMUP).toContain("stale=1");
+  });
+
+  it("sends /health/warm as a POST", () => {
+    // It is a POST route; sending a GET returns 405, and a warm-up that prints
+    // 405 as though it warmed something is the false success this script
+    // exists to prevent.
+    expect(WARMUP).toContain('warm "full warm"      "/health/warm" POST');
+    expect(WARMUP).toContain('local label="$1" path="$2" method="${3:-GET}"');
+    expect(WARMUP).toContain('-X "$method"');
+  });
+
+  it("accepts ENGINE_URL as well as BASE_ENGINE", () => {
+    // ENGINE_URL is the name used everywhere else in this project; a script
+    // that silently ignores it warms the DEPLOYED engine while you believe you
+    // are warming localhost.
+    expect(WARMUP).toContain("${BASE_ENGINE:-${ENGINE_URL:-");
+    expect(WARMUP).toContain("${BASE_WEB:-${WEB_URL:-");
   });
 
   it("is wired to npm run warmup", () => {

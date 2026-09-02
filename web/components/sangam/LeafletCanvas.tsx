@@ -111,6 +111,22 @@ export default function LeafletCanvas({
               position={[c.lat, c.lng]}
               icon={icon(cls, c.members.length, isSel, reducedMotion)}
               eventHandlers={{ click: () => onSelect(head) }}
+              /**
+               * Leaflet gives a divIcon marker `role="button"` and
+               * `tabindex="0"` but no accessible name, which axe reports as a
+               * serious violation -- a control in the tab order that a screen
+               * reader announces as just "button".
+               *
+               * `title` is what Leaflet actually puts on the container element,
+               * and it serves as the accessible name; `alt` only applies to
+               * <img> icons, which a divIcon is not. Both are set: the title
+               * names the control, the alt is harmless and documents intent.
+               */
+              title={
+                c.members.length > 1
+                  ? `${c.members.length} hosts at this coordinate, ${cls}`
+                  : `${head.host}, ${cls}`
+              }
               alt={`${head.host}, ${cls}`}
             >
               <Tooltip direction="top" offset={[0, -10]} opacity={1}>

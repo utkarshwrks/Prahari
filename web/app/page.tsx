@@ -126,7 +126,9 @@ export default function Home() {
               <div key={m.label} className="bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] px-4 py-4 backdrop-blur">
                 <dd className="mono tnum text-2xl font-bold text-[var(--c-high)]">{m.value}</dd>
                 <dt className="mono mt-1 text-[9px] uppercase tracking-[0.14em] text-[var(--muted)]">{m.label}</dt>
-                <p className="mono mt-1 text-[9px] leading-relaxed text-[var(--muted-2)]">{m.note}</p>
+                {/* A second <dd>, not a <p>: a div inside a <dl> may contain
+                    only dt/dd, and one term may carry several descriptions. */}
+                <dd className="mono mt-1 text-[9px] leading-relaxed text-[var(--muted-2)]">{m.note}</dd>
               </div>
             ))}
           </dl>

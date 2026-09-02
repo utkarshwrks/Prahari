@@ -280,3 +280,138 @@ class TestPingEndpoint:
         d = client.get("/health").json()
         assert d["ok"] is True
         assert "database" in d["checks"]
+
+
+class TestDiagnostics:
+    """`GET /health/diagnostics` (DEC-066).
+
+    Waking a service is not the same as making it fast. This endpoint exists to
+    say WHICH of the three delays is currently true -- cold start, cold caches,
+    or a dependency down -- so "the deployed one is slow" stops being a guess.
+    """
+
+    def test_it_names_which_caches_are_warm(self, client):
+        r = client.get("/health/diagnostics")
+        assert r.status_code == 200
+        caches = r.json()["caches"]
+        assert "signals" in caches
+        assert "actors_index" in caches
+
+    def test_warmth_is_read_from_the_lru_cache_itself(self):
+        """NOT from a module global.
+
+        The first version of this endpoint read `getattr(eval, "_SIGNALS")` and
+        `getattr(actors, "_INDEX")`. Neither global exists -- both functions are
+        `@lru_cache(maxsize=1)` -- so the endpoint reported every cache as cold
+        forever, which is worse than no endpoint at all: a diagnostic that is
+        always wrong sends you looking in the wrong place.
+        """
+        from engine.fusion import eval as _eval
+        from engine.engines import actors as _actors
+
+        assert hasattr(_eval.build_signals, "cache_info")
+        assert hasattr(_actors._index, "cache_info")
+        assert not hasattr(_eval, "_SIGNALS")
+        assert not hasattr(_actors, "_INDEX")
+
+    def test_reading_diagnostics_does_not_itself_warm_anything(self, client):
+        """A diagnostic that warms what it measures can never report cold."""
+        from engine.fusion import eval as _eval
+
+        before = _eval.build_signals.cache_info()
+        client.get("/health/diagnostics")
+        after = _eval.build_signals.cache_info()
+        assert after.misses == before.misses
+
+    def test_the_verdict_is_one_of_the_three_known_states(self, client):
+        assert client.get("/health/diagnostics").json()["verdict"] in {
+            "warm",
+            "cold-start",
+            "degraded",
+        }
+
+    def test_it_explains_the_verdict_in_words(self, client):
+        # A judge reading this should not need the source to interpret it.
+        assert len(client.get("/health/diagnostics").json()["detail"]) > 20
+
+    def test_it_resolves_no_onion_host(self, client):
+        # INV-1 holds everywhere, diagnostics included.
+        body = client.get("/health/diagnostics").text
+        assert ".onion" not in body
+
+
+class TestWarm:
+    """`POST /health/warm` -- the thing that makes live data fast."""
+
+    def test_it_warms_every_cache_the_first_page_needs(self, client):
+        r = client.post("/health/warm")
+        assert r.status_code == 200
+        assert r.json()["warmed"] is True
+        for cache in ("signals", "calibrator", "actors_index"):
+            assert cache in r.json()["detail"]
+
+    def test_after_warming_the_diagnostics_report_warm(self, client):
+        client.post("/health/warm")
+        assert client.get("/health/diagnostics").json()["verdict"] == "warm"
+
+    def test_the_cheap_ping_does_NOT_warm(self, client):
+        """`/health/ping` runs every five minutes and must stay trivial.
+
+        If the ping warmed caches it would rebuild them continuously for the
+        whole window, burning CPU on a free instance for no benefit. Warming is
+        a separate, once-per-window call for exactly this reason.
+        """
+        import inspect
+        from engine.routers import health as H
+
+        src = inspect.getsource(H)
+        ping = src[src.index("def ping") : src.index("def diagnostics")]
+        for expensive in ("build_signals", "ensure_calibrated", "list_actors"):
+            assert expensive not in ping
+
+
+def _warm_source() -> str:
+    """The body of the nested `_warm` in engine.main.
+
+    Sliced by INDENTATION rather than by a blank line -- `_warm` contains blank
+    lines inside its own comments, and a naive slice at the first one silently
+    truncated this check to four lines and made it pass for the wrong reason.
+    """
+    import inspect
+    import textwrap
+
+    from engine import main as M
+
+    lines = inspect.getsource(M).splitlines()
+    start = next(i for i, l in enumerate(lines) if l.strip().startswith("def _warm"))
+    indent = len(lines[start]) - len(lines[start].lstrip())
+    out = [lines[start]]
+    for line in lines[start + 1 :]:
+        if line.strip() and (len(line) - len(line.lstrip())) <= indent:
+            break
+        out.append(line)
+    return textwrap.dedent("\n".join(out))
+
+
+class TestStartupWarmsTheActorsIndex:
+    """DEC-066 -- the actual cause of "slow on deploy, fast locally".
+
+    The startup routine warmed `build_signals()` and the calibrator but not the
+    actors index. `/actors` is the FIRST call the workbench, the actor list and
+    SANGAM all make, so every cold start paid to rebuild that index while the
+    engine's own health check reported it warm.
+    """
+
+    def test_the_startup_routine_warms_the_actors_index(self):
+        warm = _warm_source()
+        assert "build_signals" in warm
+        assert "ensure_calibrated" in warm
+        assert "list_actors" in warm, (
+            "the actors index is not warmed at startup; every cold start will "
+            "rebuild it on the first /actors call"
+        )
+
+    def test_warming_failure_is_never_fatal(self):
+        # Warming is an optimisation. An engine that refuses to boot because a
+        # cache would not build is strictly worse than a slow one.
+        assert "except Exception" in _warm_source()

@@ -18,6 +18,24 @@ const WORKSPACE_ON = process.env.NEXT_PUBLIC_FF_WORKSPACE === "1";
 
 const nextConfig = {
   reactStrictMode: true,
+
+  /**
+   * The image optimizer is DISABLED (Phase 8 security pass).
+   *
+   * `npm audit` reports a high-severity DoS against Next's Image Optimization
+   * endpoint on self-hosted applications, fixed only in Next 16 -- a major
+   * framework migration this project is not doing inside a release gate.
+   *
+   * The endpoint is reachable on any self-hosted Next app whether or not
+   * `next/image` is used, and this app uses it NOWHERE: the one image in the
+   * tree is the TOTP enrolment QR, a server-generated data URI that an
+   * optimiser must not touch anyway. Turning the optimizer off removes the
+   * vulnerable route entirely rather than leaving it exposed and unused.
+   *
+   * Cost: `next/image` would render a plain <img> if anyone added one. That is
+   * the correct trade for a surface we do not use.
+   */
+  images: { unoptimized: true },
   async rewrites() {
     // Flag off: /workbench serves the classic cockpit, exactly as before.
     //

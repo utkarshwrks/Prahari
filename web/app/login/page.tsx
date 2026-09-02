@@ -48,8 +48,12 @@ export default function Page() {
           <dl className="mt-6 grid grid-cols-3 gap-2">
             {TRUST.map((t) => (
               <div key={t.label} className="glass px-3 py-2.5">
-                <t.icon className="h-3.5 w-3.5" style={{ color: "var(--accent)" }} strokeWidth={1.75} />
-                <dt className="mono mt-1.5 text-[9px] uppercase tracking-[0.12em] text-[var(--text)]">{t.label}</dt>
+                {/* The icon moves INSIDE the <dt>: a div inside a <dl> may
+                    contain only dt/dd, so a bare <svg> there is invalid. */}
+                <dt className="mono mt-1.5 text-[9px] uppercase tracking-[0.12em] text-[var(--text)]">
+                  <t.icon className="mb-1.5 h-3.5 w-3.5" style={{ color: "var(--accent)" }} strokeWidth={1.75} />
+                  {t.label}
+                </dt>
                 <dd className="mono mt-0.5 text-[8.5px] leading-tight text-[var(--muted-2)]">{t.note}</dd>
               </div>
             ))}

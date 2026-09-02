@@ -1468,3 +1468,74 @@ monthly usage inside the free allowance"* — cannot be fully claimed from here:
 it needs a month of real running and the owner's usage page. That is recorded as
 a condition, which is this project's existing convention (DEC-052) and the
 honest verdict. **DEC-064, DEC-065.**
+
+---
+
+## Phase 8 — hardening, accessibility, cold start
+
+| Suite | Command | Result |
+|---|---|---|
+| Web unit | `npx vitest run` (in `web/`) | **991 passed**, 25 files |
+| Engine | `uv run pytest -q` (in `engine/`) | **493 passed**, 17 skipped |
+| E2E journey | `node e2e/journey.mjs` | see below |
+| Accessibility | `node e2e/axe.mjs` | **17/17 routes clean** (serious + critical) |
+| Warm-up | `npm run warmup` | all services up, four caches warmed |
+| Solidity | `forge test` | **not run** — `forge` is not installed in this environment and never has been. Unchanged since Phase 0; stated rather than implied. |
+
+### New in Phase 8
+
+**`web/e2e/axe.mjs`** — axe-core injected into a real browser over 17 routes,
+ruleset `wcag2a` + `wcag2aa`, reporting serious and critical only. Not a static
+scan of source: it runs the real pages with real styles, which is the only way
+the `--muted-2` contrast failure was visible at all.
+
+**Engine `TestDiagnostics` / `TestWarm` / `TestStartupWarmsTheActorsIndex`** —
+41 tests in `test_uptime.py`. Three are worth naming:
+
+- `test_warmth_is_read_from_the_lru_cache_itself` asserts `_SIGNALS` and
+  `_INDEX` do **not** exist, because the first draft read those non-existent
+  globals and would have reported every cache cold forever.
+- `test_reading_diagnostics_does_not_itself_warm_anything` compares
+  `cache_info().misses` before and after. A diagnostic that warms what it
+  measures can never report a cold cache.
+- `test_the_startup_routine_warms_the_actors_index` is the regression test for
+  DEC-066. Its source-slicing helper cuts by **indentation**, not by the first
+  blank line — the naive version silently truncated to four lines and passed
+  for the wrong reason.
+
+**`web/__tests__/keepalive.test.ts`** — updated to the 5-minute / 10-hour /
+2-service schedule and extended: the guard call must reference `$KEPT_WARM`
+rather than a literal, and warming must be once-per-window rather than part of
+the every-5-minute ping.
+
+### Measured, after the DEC-066 fix
+
+```
+verdict: warm
+caches : {'signals': True, 'actors_index': True}
+first /actors        0.0107 s
+first /fusion/metrics 0.0231 s
+```
+
+Before the fix, the same engine reported `actors_index: False` fifteen seconds
+after boot while calling itself healthy.
+
+### Found by running things, in this phase
+
+| Where | What | Now |
+|---|---|---|
+| `/command` | two `overflow-auto` panels unreachable by keyboard — only visible once the table had rows | `tabIndex={0}` + labelled `role="region"`; 17/17 clean |
+| `warmup.sh` | reported **NOT AWAKE** after 150 s for services answering **404** | any HTTP answer is awake (DEC-063's rule, applied here) |
+| `warmup.sh` | `/health/warm` sent as GET → **405**, printed as a success | `warm()` takes a method |
+| `warmup.sh` | ignored `ENGINE_URL`, so it warmed the *deployed* engine while appearing to warm localhost | both names accepted |
+| live deploy | engine and web answer **404** on their health paths | they predate Phase 7 — the branch must be pushed and redeployed |
+
+### Local run, everything up
+
+```
+engine   awake in 0s (HTTP 200)     actors index    32ms
+web      awake in 0s (HTTP 200)     signals cache   44ms
+v1       awake in 0s (HTTP 200)     audit ledger    23ms
+                                    graph stats     21ms
+                                    full warm       20ms
+```
