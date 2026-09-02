@@ -685,3 +685,94 @@ proxy ceiling moves 8s → 45s as a backstop. Warming is an optimisation and nev
 the engine logs it and the first request is merely slow.
 
 Measured after the fix: first audit call **11.4 s** on a cold clone, 25/25 journey, 7/7 demo steps.
+
+---
+
+## v2.1 Upgrade — Phase 1
+
+### DEC-055 — The skin is drawn once per **visit**, and semantic colour is not skin colour.
+
+Two decisions, because investigating the first one uncovered the second, and the second is the one
+that mattered.
+
+#### The reported bug
+
+`SKIN_PICKER_SCRIPT` re-rolled on every document load. Any full navigation, hard refresh, or route
+that escaped the client router repainted the entire product in a different palette **and moved the
+side rail from one edge to the other** mid-investigation. Measured before the fix: a five-route walk
+produced four different draws (`plasma → arctic → ember → arctic → plasma`).
+
+Read as decoration this is a papercut. It is not decoration. An analyst comparing two actors builds a
+mental map keyed on colour, and this moved it under them between routes.
+
+#### The decision — a four-tier resolution, resolved pre-paint
+
+| # | Source | Lifetime |
+|---|---|---|
+| 1 | `?skin=` query param | that request only; does **not** overwrite the session draw |
+| 2 | `localStorage["prahari.skin.lock"]` | permanent, user-set |
+| 3 | `sessionStorage["prahari.skin.session"]` | **the visit** — the fix |
+| 4 | fresh random draw | written to sessionStorage immediately |
+
+Tier 1 deliberately does not persist. `?skin=abyss` exists for screenshots and bug reports; if it
+overwrote the visit, sharing a link would silently repaint the recipient's session when they navigated
+away from that URL.
+
+The record is `{ skin, layout, fontPair, drawnAt, v: 2 }` and is **versioned**. A record of an older
+shape is discarded and redrawn, never crashed on. Every field is validated against the registry before
+it is applied — a stored record is attacker-influencable on a shared machine, and it lands in a DOM
+attribute.
+
+**Layout and type are in the same record.** A rail that jumps sides between routes is worse than a
+palette change, and the type pair used to be pinned by the skin, so type could only change when the
+palette did. It is now its own draw; `html[data-font="0|1|2"]` blocks sit after the skin blocks so
+they win at equal specificity, and a document with no `data-font` (JS disabled) keeps the skin's choice.
+
+**Storage may throw, not just be empty.** Safari private mode, embedded webviews and some enterprise
+policies make even *reading* `sessionStorage` throw. Every access is individually wrapped and falls
+back to a module-scoped in-memory singleton, so the draw is still stable for the SPA lifetime. A skin
+is not worth a blank page: the outermost catch still sets `ember`/`a`/`0` rather than leaving the
+document unstyled.
+
+The pre-paint script must be dependency-free inline JS, so it cannot import the resolver. It is a
+hand-written mirror of `resolveDraw()`. Three layers keep them honest, and no one of them is enough:
+`skinSession.test.ts` covers the resolver exhaustively, `skins.test.ts` asserts the script carries the
+same keys, tiers and guards, and the e2e walk drives the **real** script across six routes and a hard
+reload. DEC-042 is the standing reminder of what a unit test alone proves about browser-only code.
+
+**Cost:** a returning visitor now sees the same skin all visit rather than a new one per page. That is
+the point, but it does make the generative engine less immediately visible — so `ThemeControl` gained
+a caption stating which tier is in force (`Session skin · Ember` / `Locked · Abyss`), and Reshuffle,
+Lock and Unlock are now three distinct, labelled behaviours. Unlock keeps the current draw: re-rolling
+there would punish the user for asking a question about persistence.
+
+#### The decision underneath — `--sig-*` and `--ent-*` are declared in `:root` and nowhere else
+
+Chasing the first bug surfaced the real one. Every signal root on the evidence trail was drawn with:
+
+```css
+linear-gradient(90deg, var(--accent-dim), var(--accent))
+```
+
+All six roots in **one** colour, and that colour skin-dependent. Bar length was the only encoding, and
+the single thing colour did carry on that panel was the thing guaranteed to change on every load. The
+graph legend was better — hardcoded hex — but the same literals were hand-copied into three places
+(`ActorGraph3D`'s `KIND_COLORS`, its `LEGEND`, and `ActorGraphPanel`'s `LEGEND`), which is drift
+waiting to happen.
+
+Colour that carries meaning now lives in `lib/signals.ts` as the single source of truth, mirrored into
+`:root` as `--sig-identity`, `--sig-infra`, `--sig-financial`, `--sig-temporal`, `--sig-linguistic`,
+`--sig-social` and `--ent-*`. **No `html[data-skin]` block may redefine one.** Three.js integers are
+derived from the same hex literals, so the 3D view and its legend cannot drift.
+
+Asserted structurally rather than by six screenshots: a custom property never redefined in any skin
+block is identical across skins *by construction*, which is a stronger statement than six renders
+agreeing. `signals.test.ts` checks both directions (no skin defines one; each is declared exactly
+once) and the e2e reads the computed values under all six skins — with a **control** asserting
+`--accent` *does* vary, so a passing test proves something.
+
+INV-11 still holds: every colour-coded row carries its label, the swatch is `aria-hidden`, and a
+reader who cannot distinguish the colours loses nothing.
+
+**Measured:** 48/48 e2e (13 new DEC-055 checks), 220 web unit tests, `/workbench` first-load JS
+unchanged at 131 kB / 239 kB.

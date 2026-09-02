@@ -159,6 +159,63 @@ Files removed: **NONE**.
 
 ### Next
 
-**Phase 1 — the skin bug: draw once per visit.** `skins.test.ts` already pins the picker's current
-contract and records that the semantic signal-root tokens (`--sig-identity`, `--sig-infra`, …) do not
-exist yet, which is the separation Phase 1 has to create.
+**Phase 1 — the skin bug: draw once per visit.**
+
+---
+
+## Phase 1 — The skin bug: draw once per visit
+
+**Status: COMPLETE. DEC-055.**
+
+| Check | Phase 0b | Phase 1 |
+|---|---|---|
+| `npm test` | 144 | **220 passed** |
+| `node web/e2e/journey.mjs` | 35/35 | **48/48** |
+| `uv run pytest -q` | 239 / 17 skipped | unchanged |
+| `npm run lint` / `build` | clean | clean, `/workbench` unchanged at 131 kB / 239 kB |
+| `forge test` | not run | not run — same stated condition |
+
+**507 green.**
+
+### What changed
+
+1. **`lib/skins.ts`** — a four-tier resolution (`?skin=` → lock → session → fresh draw), resolved
+   synchronously pre-paint. The visit's draw is a versioned `{skin, layout, fontPair, drawnAt, v:2}`
+   record in `sessionStorage`; an older or corrupt shape is discarded and redrawn, never crashed on.
+   Every storage access is individually guarded and falls back to an in-memory singleton.
+2. **`lib/signals.ts`** (new) — the single source of truth for colour that carries meaning, mirrored
+   into `:root` as `--sig-*` / `--ent-*`, which no skin block may redefine.
+3. **`globals.css`** — semantic tokens in `:root`; `html[data-font="0|1|2"]` blocks after the skin
+   blocks, so the type pair is drawn independently of the palette.
+4. **`ThemeControl`** — Reshuffle / Lock / Unlock are now three distinct labelled behaviours, with a
+   caption stating which tier is in force. Unlock keeps the current draw.
+5. **`EvidenceTrail`, `ActorGraphPanel`, `ActorGraph3D`** — read the shared registry instead of
+   hand-copied literals.
+
+### The bug underneath the bug
+
+Every signal root on the evidence trail was drawn with
+`linear-gradient(var(--accent-dim), var(--accent))`: all six in one colour, and that colour
+skin-dependent. Bar length was the only encoding. That — not the palette re-roll — was the
+evidence-integrity problem, and it is what DEC-055 actually fixes.
+
+### Rollback
+
+```bash
+git revert <phase-1-sha>
+```
+
+Files added: `web/lib/signals.ts`, `web/__tests__/skinSession.test.ts`,
+`web/__tests__/signals.test.ts`, `web/e2e/__phase1__/workbench-abyss.png`.
+Files changed: `web/lib/skins.ts`, `web/app/globals.css`,
+`web/components/system/ThemeControl.tsx`, `web/components/workbench/EvidenceTrail.tsx`,
+`web/components/workbench/ActorGraphPanel.tsx`, `web/components/three/ActorGraph3D.tsx`,
+`web/e2e/journey.mjs`, `web/__tests__/{skins,security}.test.ts`, `web/tsconfig.json`,
+`docs/{DECISIONS,TESTLOG,UPGRADE_V2.1}.md`.
+Files removed: **NONE**.
+
+### Next
+
+**Phase 2 — the analyst workspace.** Ten routed surfaces under `/workbench/*` behind
+`NEXT_PUBLIC_FF_WORKSPACE`, with the legacy single-page cockpit still mounted at `/workbench/classic`.
+FINDING-07 lands here: the first drawer or modal must wire `trapFocus` back in.

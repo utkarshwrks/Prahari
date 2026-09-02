@@ -1,5 +1,10 @@
 {
   "compilerOptions": {
+    // Explicit. With no target, tsc defaults to ES5 and rejects `matchAll`,
+    // Set/iterator spread and the `u`/`s` regex flags -- so `npx tsc --noEmit`
+    // disagreed with `next build`, which supplies its own. Type checking only:
+    // noEmit is on and Next compiles with SWC, so this changes no output.
+    "target": "es2020",
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,

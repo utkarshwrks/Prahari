@@ -824,3 +824,76 @@ not a measurement, and it is recorded as a condition rather than a pass.
 **PHASE 0 GATE: GREEN.** Four of the five suites run and pass, the fifth is a stated environment
 condition. `npm test` and `node web/e2e/journey.mjs` can now fail, which is the only property that
 makes them gates. **Phase 1 may start.**
+
+---
+
+## v2.1 Phase 1 — the skin bug: draw once per visit
+
+| Check | Phase 0b | Phase 1 | Result |
+|---|---|---|---|
+| `npm test` | 144 passed | **220 passed** (12 files) | **PASS** |
+| `npm run lint` | clean | clean | **PASS** |
+| `npm run build` | clean | clean, `/workbench` unchanged at 131 kB / 239 kB | **PASS** |
+| `uv run pytest -q` | 239 / 17 skipped | 239 / 17 skipped | **PASS** |
+| `node web/e2e/journey.mjs` | 35/35 | **48/48** | **PASS** |
+| `forge test` | not run | not run | **CONDITION** |
+
+**Total: 507 green** (220 web · 239 engine · 48 e2e).
+
+### New unit coverage
+
+| File | Tests | Covers |
+|---|---|---|
+| `skinSession.test.ts` | 33 | All four resolution tiers; nine corrupt/outdated record shapes; storage that throws on read, on write, and on both; the in-memory fallback; persist round-trip |
+| `signals.test.ts` | 37 | **The gate** — six skins × two token families, both directions, declared exactly once; stylesheet ↔ TypeScript agreement; three.js integers derived from the same literals; components read the registry, not literals |
+| `skins.test.ts` | 14 → 19 | Rewritten for the new script: tier order, per-field record validation, persist-vs-not, per-access storage guards, the independent type pair |
+| `security.test.ts` | 18 → 19 | The script's interpolations are restricted to a named allowlist of module constants; every runtime input is validated against the registry |
+
+### New e2e coverage — 13 checks
+
+```
+PASS  first load draws a skin — plasma/a/font 0
+PASS  first load records it as a fresh draw — fresh
+PASS  skin, layout and type hold across public routes
+PASS  later loads resolve from the session, not a new draw
+PASS  draw survives login and the workbench — plasma/a/0
+PASS  draw survives /sangam
+PASS  draw survives a HARD RELOAD of /workbench — plasma/a/0
+PASS  ?skin= applies for that request
+PASS  ?skin= did NOT overwrite the visit's draw
+PASS  skin is applied before first paint (no flash) — abyss
+PASS  signal-root colours are identical across all six skins
+PASS  decorative accent DOES vary by skin (control) — 3 distinct
+PASS  a new visit draws independently — 5 distinct draws in 6 visits
+```
+
+Two of those deserve naming. The **control** check asserts `--accent` *does* differ across three
+skins: without it, "signal colours identical across six skins" would also pass if the walk were
+silently reading nothing. And **independence** samples six fresh contexts rather than two, so the
+check does not depend on a 1-in-36 coincidence to avoid a false failure.
+
+### Measured before the fix
+
+The same walk on the pre-DEC-055 build, for the record:
+
+```
+FAIL  skin, layout and type hold across public routes
+      — /about: arctic/a | /docs: ember/b | /login: arctic/b | /: plasma/b
+FAIL  draw survives a HARD RELOAD of /workbench — plasma/b (was plasma/a)
+FAIL  signal-root colours are identical across all six skins
+```
+
+Four different draws in a five-route walk, and the rail changed sides twice.
+
+### Four Phase 0b tests changed, deliberately
+
+`skins.test.ts` and `security.test.ts` pinned the *pre*-DEC-055 contract, including one named
+"records that semantic signal-root tokens are not yet separated". They failed when Phase 1 landed —
+which is the tests working, not breaking. Each was rewritten to assert the new contract, and the
+properties they guarded (input validation, storage guards, fallback-still-sets-a-skin, no unvalidated
+interpolation) are all still asserted, more strictly than before.
+
+### Verdict
+
+**PHASE 1 GATE: GREEN.** Skin constant within a visit, independent across visits, no first-paint
+flash, semantic tokens identical under all six skins with a passing control. **DEC-055.**

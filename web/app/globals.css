@@ -44,6 +44,35 @@
   --grid: color-mix(in srgb, var(--text) 3%, transparent);
   --font-disp: var(--font-display);
   --font-code: var(--font-mono);
+
+  /* ---- SEMANTIC COLOUR — DEC-055 -------------------------------------------
+     These carry MEANING, not atmosphere. Signal-root colour on the evidence
+     trail; entity-type colour in the relationship graph. They are declared here
+     in :root and NOWHERE ELSE — no `html[data-skin]` block may redefine one.
+
+     Before DEC-055 every signal root was drawn with
+     `linear-gradient(var(--accent-dim), var(--accent))`: all six roots shared
+     one colour, and that colour changed with the skin. An analyst comparing two
+     actors watched the semantics move under them.
+
+     Mirrored from `lib/signals.ts`, which is the single source of truth (the
+     3D graph needs the same values as three.js integers). `signals.test.ts`
+     asserts the two agree and that no skin overrides them.
+     ------------------------------------------------------------------------ */
+  --sig-identity:   #e8503a;
+  --sig-infra:      #9b7fd8;
+  --sig-financial:  #d9a441;
+  --sig-temporal:   #5b9bd5;
+  --sig-linguistic: #4fa97e;
+  --sig-social:     #c98bb0;
+
+  --ent-actor:   #e8503a;
+  --ent-persona: #e9e9ee;
+  --ent-pgp:     #e8503a;
+  --ent-wallet:  #d9a441;
+  --ent-email:   #5b9bd5;
+  --ent-onion:   #7fb77e;
+  --ent-infra:   #9b7fd8;
 }
 
 /* ---- skins ------------------------------------------------------------- */
@@ -84,6 +113,16 @@ html[data-skin="arctic"] {
   --accent:#22D3EE; --accent-2:#60A5FA; --accent-dim:#177f8f; --c-low:#4E6980;
   --radius:5px; --radius-lg:10px; --font-disp:var(--font-display-b);
 }
+
+/* ---- type pairs — drawn independently of the skin (DEC-055) --------------
+   The font pair used to be pinned by the skin, so type could only change when
+   the palette did. It is now its own draw, held in the same session record, and
+   these blocks come AFTER the skin blocks so they win at equal specificity.
+   A document with no data-font (JS disabled) keeps the skin's choice.
+   ------------------------------------------------------------------------- */
+html[data-font="0"] { --font-disp: var(--font-display);   --font-code: var(--font-mono); }
+html[data-font="1"] { --font-disp: var(--font-display-b); --font-code: var(--font-mono-b); }
+html[data-font="2"] { --font-disp: var(--font-display-c); --font-code: var(--font-mono); }
 
 * { border-color: var(--border); }
 

@@ -6,6 +6,7 @@ import { Billboard, Line, OrbitControls, Points, PointMaterial, Text } from "@re
 import * as THREE from "three";
 import { forceLink, forceManyBody, forceSimulation } from "d3-force";
 import type { ActorProfile } from "@/lib/api";
+import { ENTITY_COLOR, ENTITY_COLOR_HEX } from "@/lib/signals";
 
 /**
  * Explainable 3D relationship graph.
@@ -29,20 +30,29 @@ type N = {
 type L = { source: string | N; target: string | N; strength: number; color: number; kind: string; pairId?: string };
 
 const C = {
-  actor: 0xe8503a, persona: 0xe9e9ee, pgp: 0xe8503a, wallet: 0xd9a441,
-  email: 0x5b9bd5, onion: 0x7fb77e, infra: 0x9b7fd8,
+  // From lib/signals.ts, as three.js integers derived from the SAME literals
+  // the DOM legend uses (DEC-055). Colour is the entity type here, so it must
+  // not vary with the skin, and the 3D view and its legend must not drift.
+  ...ENTITY_COLOR_HEX,
 };
+/**
+ * Scene fill light. Decorative, not semantic -- it shares no meaning with any
+ * entity colour and is named so nobody reads the coincidence with --ent-email
+ * as a link. Changing it is a pure aesthetic choice.
+ */
+const RIM_LIGHT = 0x5b9bd5;
+
 const IDENT_COLOR: Record<string, number> = {
   pgp: C.pgp, wallet: C.wallet, email: C.email, onion: C.onion,
 };
 
 export const LEGEND: { kind: string; color: string; label: string }[] = [
-  { kind: "actor", color: "#e8503a", label: "Actor (resolved identity)" },
-  { kind: "persona", color: "#e9e9ee", label: "Persona (one handle)" },
-  { kind: "pgp", color: "#e8503a", label: "PGP key" },
-  { kind: "wallet", color: "#d9a441", label: "Wallet" },
-  { kind: "email", color: "#5b9bd5", label: "Email / contact" },
-  { kind: "infra", color: "#9b7fd8", label: "Infrastructure" },
+  { kind: "actor", color: ENTITY_COLOR.actor, label: "Actor (resolved identity)" },
+  { kind: "persona", color: ENTITY_COLOR.persona, label: "Persona (one handle)" },
+  { kind: "pgp", color: ENTITY_COLOR.pgp, label: "PGP key" },
+  { kind: "wallet", color: ENTITY_COLOR.wallet, label: "Wallet" },
+  { kind: "email", color: ENTITY_COLOR.email, label: "Email / contact" },
+  { kind: "infra", color: ENTITY_COLOR.infra, label: "Infrastructure" },
 ];
 
 function shortVal(v: string) {
@@ -288,7 +298,7 @@ export default function ActorGraph3D({
       onPointerMissed={() => onSelect(null)}>
       <ambientLight intensity={0.75} />
       <pointLight position={[4, 4, 4]} intensity={0.5} />
-      <pointLight position={[-4, -2, -3]} intensity={0.3} color={0x5b9bd5} />
+      <pointLight position={[-4, -2, -3]} intensity={0.3} color={RIM_LIGHT} />
       {holo && <Starfield />}
       <GraphScene profile={profile} selected={selected} onSelect={onSelect} />
       <OrbitControls enablePan={false} enableZoom minDistance={2.8} maxDistance={holo ? 16 : 10} rotateSpeed={0.6} />

@@ -6,17 +6,20 @@ import { Copy, Maximize2, Minimize2, Network, RotateCcw, X } from "lucide-react"
 import type { ActorProfile } from "@/lib/api";
 import type { GraphSelection } from "../three/ActorGraph3D";
 import { prefersReducedMotion } from "@/lib/a11y";
+import { ENTITY_COLOR } from "@/lib/signals";
 
 const ActorGraph3D = dynamic(() => import("../three/ActorGraph3D"), { ssr: false });
 
 // Kept local (not imported from the three module) so the heavy 3D bundle stays
 // behind the dynamic import and never leaks into this panel's chunk.
+// Colour carries meaning here, so it comes from lib/signals.ts and never from
+// a skin token (DEC-055). These literals used to be duplicated in three places.
 const LEGEND: { color: string; label: string }[] = [
-  { color: "#e8503a", label: "Actor / PGP" },
-  { color: "#e9e9ee", label: "Persona" },
-  { color: "#d9a441", label: "Wallet" },
-  { color: "#5b9bd5", label: "Email" },
-  { color: "#9b7fd8", label: "Infra" },
+  { color: ENTITY_COLOR.actor, label: "Actor / PGP" },
+  { color: ENTITY_COLOR.persona, label: "Persona" },
+  { color: ENTITY_COLOR.wallet, label: "Wallet" },
+  { color: ENTITY_COLOR.email, label: "Email" },
+  { color: ENTITY_COLOR.infra, label: "Infra" },
 ];
 
 /**

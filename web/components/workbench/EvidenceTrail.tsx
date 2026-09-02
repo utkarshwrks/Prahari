@@ -5,6 +5,7 @@ import { AlertTriangle, Layers, Sigma } from "lucide-react";
 import { api, type PairScore } from "@/lib/api";
 import Panel from "../ui/Panel";
 import { confidenceColor } from "../ui/Confidence";
+import { SIGNAL_LABEL, signalVar, type SignalRoot } from "@/lib/signals";
 
 /**
  * The evidence trail. This panel is the argument the project is built on.
@@ -18,10 +19,24 @@ import { confidenceColor } from "../ui/Confidence";
  * recompute it is not evidence.
  */
 
-const ROOT_LABEL: Record<string, string> = {
-  identity_key: "Identity key", financial: "Financial", infra: "Infrastructure",
-  linguistic: "Linguistic", temporal: "Temporal", social: "Social",
-};
+// Labels come from lib/signals.ts, the single source of truth for signal-root
+// naming and colour, so the trail and the graph legend cannot disagree.
+const ROOT_LABEL: Record<string, string> = SIGNAL_LABEL;
+
+/**
+ * The bar colour for a root (DEC-055).
+ *
+ * Was `linear-gradient(var(--accent-dim), var(--accent))` for EVERY root: all
+ * six drawn in one colour, and that colour skin-dependent. Bar length was the
+ * only encoding, and the single thing colour did carry moved when the skin was
+ * redrawn. `--sig-*` is declared once in :root and no skin may override it.
+ */
+function rootColor(root: string): string {
+  const v = signalVar(root as SignalRoot);
+  // Unknown roots keep the neutral token rather than borrowing another root's
+  // colour, which would assert a kinship that does not exist.
+  return SIGNAL_LABEL[root as SignalRoot] ? `var(${v})` : "var(--muted-2)";
+}
 
 export default function EvidenceTrail({ pairId }: { pairId: string | null }) {
   const [d, setD] = useState<PairScore | null>(null);
@@ -116,6 +131,11 @@ export default function EvidenceTrail({ pairId }: { pairId: string | null }) {
                 {roots.map(([root, v]) => (
                   <div key={root} className="space-y-1 border-t border-[var(--border)] pt-1.5">
                     <div className="flex items-center gap-2 text-[10px]">
+                      <span
+                        aria-hidden="true"
+                        className="h-2 w-2 shrink-0 rounded-full"
+                        style={{ background: rootColor(root) }}
+                      />
                       <span className="flex-1 truncate text-[var(--text)]">{ROOT_LABEL[root] ?? root}</span>
                       <span className="tnum w-8 text-right text-[var(--muted)]">{v.s.toFixed(2)}</span>
                       <span className="tnum w-12 text-right text-[var(--muted)]">{v.lr.toFixed(3)}</span>
@@ -123,7 +143,12 @@ export default function EvidenceTrail({ pairId }: { pairId: string | null }) {
                       <span className="tnum w-12 text-right font-bold text-[var(--c-high)]">{v.lr_pow_r.toFixed(3)}</span>
                     </div>
                     <span className="bar block">
-                      <span style={{ width: `${(v.lr_pow_r / maxBar) * 100}%`, background: "linear-gradient(90deg, var(--accent-dim), var(--accent))" }} />
+                      <span
+                        style={{
+                          width: `${(v.lr_pow_r / maxBar) * 100}%`,
+                          background: `linear-gradient(90deg, color-mix(in srgb, ${rootColor(root)} 45%, transparent), ${rootColor(root)})`,
+                        }}
+                      />
                     </span>
                   </div>
                 ))}

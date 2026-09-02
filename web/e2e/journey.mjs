@@ -55,6 +55,8 @@ async function visibleText(page) {
   });
 }
 
+const loginOn = (page) => login(page);
+
 async function login(page) {
   await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
   await page.fill('input[type="email"]', EMAIL);
@@ -170,6 +172,141 @@ const run = async () => {
   );
   log("every visible control has an accessible name", unnamed.length === 0,
       unnamed.slice(0, 3).join(" | "));
+
+  // ------------------------------------------------------- skin: once per visit
+  //
+  // DEC-055. The draw is a property of the VISIT. Walk every route, hard-reload
+  // in the middle, and assert the skin, the rail layout and the type pair are
+  // identical at every step. Then open a FRESH context and assert the draw is
+  // independent -- that difference is the feature, not a failure.
+  console.log("\n== SKIN: DRAWN ONCE PER VISIT (DEC-055) ==");
+
+  const drawOf = (p) =>
+    p.evaluate(() => {
+      const d = document.documentElement;
+      const cs = getComputedStyle(d);
+      return {
+        skin: d.getAttribute("data-skin"),
+        layout: d.getAttribute("data-layout"),
+        font: d.getAttribute("data-font"),
+        source: d.getAttribute("data-skin-source"),
+        accent: cs.getPropertyValue("--accent").trim(),
+        disp: cs.getPropertyValue("--font-disp").trim(),
+      };
+    });
+
+  const skinCtx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const sp = await skinCtx.newPage();
+  await sp.goto(`${BASE}/`, { waitUntil: "domcontentloaded" });
+  await sp.waitForTimeout(900);
+  const first = await drawOf(sp);
+  log("first load draws a skin", Boolean(first.skin), `${first.skin}/${first.layout}/font ${first.font}`);
+  log("first load records it as a fresh draw", first.source === "fresh", first.source);
+
+  const ROUTES = ["/about", "/docs", "/login", "/"];
+  let stable = true;
+  const drift = [];
+  for (const r of ROUTES) {
+    await sp.goto(`${BASE}${r}`, { waitUntil: "domcontentloaded" });
+    await sp.waitForTimeout(700);
+    const d = await drawOf(sp);
+    const same =
+      d.skin === first.skin && d.layout === first.layout &&
+      d.font === first.font && d.accent === first.accent && d.disp === first.disp;
+    if (!same) { stable = false; drift.push(`${r}: ${d.skin}/${d.layout}/${d.font}`); }
+  }
+  log("skin, layout and type hold across public routes", stable, drift.join(" | "));
+  log("later loads resolve from the session, not a new draw",
+      (await drawOf(sp)).source === "session");
+
+  // Authenticated routes, then a HARD reload -- the exact case that repainted
+  // the product mid-investigation before DEC-055.
+  await loginOn(sp);
+  await sp.waitForTimeout(4000);
+  const afterLogin = await drawOf(sp);
+  log("draw survives login and the workbench",
+      afterLogin.skin === first.skin && afterLogin.layout === first.layout &&
+      afterLogin.font === first.font,
+      `${afterLogin.skin}/${afterLogin.layout}/${afterLogin.font}`);
+
+  await sp.goto(`${BASE}/sangam`, { waitUntil: "domcontentloaded" });
+  await sp.waitForTimeout(2500);
+  const atSangam = await drawOf(sp);
+  log("draw survives /sangam",
+      atSangam.skin === first.skin && atSangam.layout === first.layout && atSangam.font === first.font);
+
+  await sp.goto(`${BASE}/workbench`, { waitUntil: "domcontentloaded" });
+  await sp.reload({ waitUntil: "domcontentloaded" });
+  await sp.waitForTimeout(4000);
+  const afterReload = await drawOf(sp);
+  log("draw survives a HARD RELOAD of /workbench",
+      afterReload.skin === first.skin && afterReload.layout === first.layout &&
+      afterReload.font === first.font && afterReload.accent === first.accent,
+      `${afterReload.skin}/${afterReload.layout}/${afterReload.font}`);
+
+  // ?skin= applies for that request and does NOT overwrite the visit.
+  await sp.goto(`${BASE}/?skin=plasma`, { waitUntil: "domcontentloaded" });
+  await sp.waitForTimeout(700);
+  const forced = await drawOf(sp);
+  log("?skin= applies for that request", forced.skin === "plasma" && forced.source === "query");
+  await sp.goto(`${BASE}/`, { waitUntil: "domcontentloaded" });
+  await sp.waitForTimeout(700);
+  log("?skin= did NOT overwrite the visit's draw", (await drawOf(sp)).skin === first.skin);
+
+  // No first-paint flash: the pre-paint script must have run before any body
+  // paint, so data-skin is present on the very first evaluation of a new page.
+  const preflight = await skinCtx.newPage();
+  await preflight.goto(`${BASE}/`, { waitUntil: "commit" });
+  const atCommit = await preflight
+    .evaluate(() => document.documentElement.getAttribute("data-skin"))
+    .catch(() => null);
+  log("skin is applied before first paint (no flash)", Boolean(atCommit), String(atCommit));
+  await preflight.close();
+
+  // Semantic colour is NOT skin colour: the six signal-root tokens must be
+  // byte-identical under every skin.
+  const SIG = ["--sig-identity", "--sig-infra", "--sig-financial",
+               "--sig-temporal", "--sig-linguistic", "--sig-social"];
+  const perSkin = {};
+  for (const id of ["ember", "abyss", "verdant", "plasma", "solar", "arctic"]) {
+    await sp.goto(`${BASE}/?skin=${id}`, { waitUntil: "domcontentloaded" });
+    await sp.waitForTimeout(500);
+    perSkin[id] = await sp.evaluate((vars) => {
+      const cs = getComputedStyle(document.documentElement);
+      return vars.map((v) => cs.getPropertyValue(v).trim());
+    }, SIG);
+  }
+  const base = JSON.stringify(perSkin.ember);
+  const differing = Object.entries(perSkin).filter(([, v]) => JSON.stringify(v) !== base);
+  log("signal-root colours are identical across all six skins",
+      differing.length === 0 && perSkin.ember.every(Boolean),
+      differing.map(([k]) => k).join(", "));
+
+  // The accent, by contrast, SHOULD move between skins -- otherwise the test
+  // above proves nothing.
+  const accents = new Set();
+  for (const id of ["ember", "abyss", "verdant"]) {
+    await sp.goto(`${BASE}/?skin=${id}`, { waitUntil: "domcontentloaded" });
+    await sp.waitForTimeout(400);
+    accents.add((await drawOf(sp)).accent);
+  }
+  log("decorative accent DOES vary by skin (control)", accents.size === 3, `${accents.size} distinct`);
+
+  await skinCtx.close();
+
+  // A new visit is an independent draw. Sample several contexts: one differing
+  // draw proves independence without depending on a 1-in-36 coincidence.
+  const draws = new Set();
+  for (let i = 0; i < 6; i++) {
+    const c = await browser.newContext({ viewport: { width: 800, height: 600 } });
+    const p2 = await c.newPage();
+    await p2.goto(`${BASE}/`, { waitUntil: "domcontentloaded" });
+    await p2.waitForTimeout(500);
+    const d = await drawOf(p2);
+    draws.add(`${d.skin}/${d.layout}/${d.font}`);
+    await c.close();
+  }
+  log("a new visit draws independently", draws.size > 1, `${draws.size} distinct draws in 6 visits`);
 
   // ------------------------------------------------------------ reduced motion
   console.log("\n== PREFERS-REDUCED-MOTION ==");

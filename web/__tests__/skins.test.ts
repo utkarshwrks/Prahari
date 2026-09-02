@@ -6,9 +6,10 @@
  * with no matching `html[data-skin="…"]` block renders an unstyled page before
  * anyone notices.
  *
- * Phase 1 rewrites the picker to draw once per VISIT rather than once per page
- * load. These tests pin the properties that must survive that rewrite, so the
- * phase has a baseline to break against rather than a blank file.
+ * DEC-055 made the picker draw once per VISIT rather than once per page load.
+ * These tests pin the registry and the pre-paint script's structural contract;
+ * the resolver's behaviour is covered in `skinSession.test.ts` and the whole
+ * thing is driven for real by the e2e walk.
  */
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
@@ -71,18 +72,54 @@ describe("the pre-paint picker script", () => {
   it("validates ?skin= and the lock against the registry before applying them", () => {
     // An unchecked value would land straight in a data attribute.
     expect(SKIN_PICKER_SCRIPT).toMatch(/ids\.indexOf\(forced\)>=0/);
-    expect(SKIN_PICKER_SCRIPT).toMatch(/ids\.indexOf\(locked\)>=0/);
+    expect(SKIN_PICKER_SCRIPT).toMatch(/ids\.indexOf\(lock\)>=0/);
+  });
+
+  it("validates every field of a restored session record (DEC-055)", () => {
+    // A stored record is attacker-influencable in a shared-machine scenario and
+    // must be checked field by field, not trusted because it parsed.
+    expect(SKIN_PICKER_SCRIPT).toMatch(/o\.v===V/);
+    expect(SKIN_PICKER_SCRIPT).toMatch(/ids\.indexOf\(o\.skin\)>=0/);
+    expect(SKIN_PICKER_SCRIPT).toMatch(/layouts\.indexOf\(o\.layout\)>=0/);
+    expect(SKIN_PICKER_SCRIPT).toMatch(/fonts\.indexOf\(o\.fontPair\)>=0/);
+  });
+
+  it("mirrors the resolver's four tiers, in order (DEC-055)", () => {
+    // The script cannot import resolveDraw -- it must be dependency-free inline
+    // JS -- so this asserts the mirror carries the same tiers. The decisive
+    // check is the e2e walk, which drives the real script.
+    const order = ["'query'", "'lock'", "'session'", "'fresh'"].map((t) =>
+      SKIN_PICKER_SCRIPT.indexOf(t)
+    );
+    expect(order.every((i) => i >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+  });
+
+  it("persists a fresh draw so the rest of the visit reuses it", () => {
+    expect(SKIN_PICKER_SCRIPT).toMatch(/sessionStorage\.setItem\(SESSION/);
+  });
+
+  it("does not persist a ?skin= or an unchanged session draw", () => {
+    // persist is set false on the query tier and on the session tier; only a
+    // fresh draw (and a lock with no session yet) writes.
+    expect(SKIN_PICKER_SCRIPT).toMatch(/src='query'; persist=false/);
+    expect(SKIN_PICKER_SCRIPT).toMatch(/src='session'; persist=false/);
   });
 
   it("wraps storage access so a private-mode throw cannot break first paint", () => {
-    expect(SKIN_PICKER_SCRIPT).toMatch(/try\{/);
-    expect(SKIN_PICKER_SCRIPT).toMatch(/catch\(e\)/);
+    // Every read goes through get(), which swallows its own throw, and every
+    // write has its own catch. Safari private mode makes even READING throw.
+    expect(SKIN_PICKER_SCRIPT).toMatch(/function get\(store,key\)\{ try\{[^}]*\}catch\(e\)\{ return null; \} \}/);
+    expect(SKIN_PICKER_SCRIPT).toMatch(/setItem\(SESSION[^;]*; \}catch\(e\)\{\}/);
     // The fallback must still set a skin, not leave the page unstyled.
-    expect(SKIN_PICKER_SCRIPT).toMatch(/catch\(e\)\{\s*document\.documentElement\.setAttribute\('data-skin'/);
+    const tail = SKIN_PICKER_SCRIPT.slice(SKIN_PICKER_SCRIPT.lastIndexOf("}catch(e){"));
+    expect(tail).toMatch(/setAttribute\('data-skin','ember'\)/);
+    expect(tail).toMatch(/setAttribute\('data-layout','a'\)/);
+    expect(tail).toMatch(/setAttribute\('data-font','0'\)/);
   });
 
-  it("sets skin, layout and freshness on the document element", () => {
-    for (const attr of ["data-skin", "data-layout", "data-fresh"]) {
+  it("sets skin, layout, type, source and freshness on the document element", () => {
+    for (const attr of ["data-skin", "data-layout", "data-font", "data-skin-source", "data-fresh"]) {
       expect(SKIN_PICKER_SCRIPT).toContain(`'${attr}'`);
     }
   });
@@ -95,30 +132,36 @@ describe("the pre-paint picker script", () => {
 
 /**
  * INV-11 and the Phase 1 gate: a skin is a pure token swap. It may change
- * palette, type and shape. It may NOT change a colour that carries meaning --
- * in the graph legend colour IS the entity type, so a skin that moved those
- * tokens would move the evidence under the analyst.
+ * palette, type and shape. It may NOT change a colour that carries meaning.
  *
- * Phase 1 separates the semantic tokens from the decorative ones and asserts
- * they are identical across all six skins. This records the state that phase
- * starts from, honestly: today the separation does not exist yet.
+ * Phase 0b recorded that the separation did not exist yet. DEC-055 created it;
+ * the full guarantee is asserted in `signals.test.ts` (every skin block, every
+ * token, both directions) and in the e2e six-skin walk. What remains here is
+ * the complement: skins must still be free to move DECORATIVE tokens, or the
+ * separation would be meaningless.
  */
-describe("semantic vs decorative tokens (Phase 1 baseline)", () => {
+describe("semantic vs decorative tokens (DEC-055)", () => {
   it("skin blocks redefine decorative tokens", () => {
     const block = GLOBALS.slice(GLOBALS.indexOf('[data-skin="abyss"]'));
     expect(block).toMatch(/--accent/);
   });
 
-  it("records that semantic signal-root tokens are not yet separated", () => {
-    // Phase 1 introduces --sig-identity, --sig-infra, --sig-financial,
-    // --sig-temporal, --sig-linguistic, --sig-social and asserts they are
-    // constant across skins. Until then this states the truth rather than
-    // asserting a guarantee the code does not make.
+  it("the semantic signal-root tokens now exist, declared in :root", () => {
     const SIGNAL_TOKENS = [
       "--sig-identity", "--sig-infra", "--sig-financial",
       "--sig-temporal", "--sig-linguistic", "--sig-social",
     ];
-    const present = SIGNAL_TOKENS.filter((t) => GLOBALS.includes(t));
-    expect(present).toEqual([]);
+    const missing = SIGNAL_TOKENS.filter((t) => !GLOBALS.includes(t));
+    expect(missing).toEqual([]);
+  });
+
+  it("the type pair is drawn independently of the skin", () => {
+    // Previously each skin pinned --font-disp, so type could only change when
+    // the palette did. The pair is its own draw now, and its blocks come after
+    // the skin blocks so they win at equal specificity.
+    for (const f of [0, 1, 2]) expect(GLOBALS).toContain(`html[data-font="${f}"]`);
+    expect(GLOBALS.indexOf('html[data-font="0"]')).toBeGreaterThan(
+      GLOBALS.indexOf('html[data-skin="arctic"]')
+    );
   });
 });

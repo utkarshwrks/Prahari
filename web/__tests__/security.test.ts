@@ -86,13 +86,33 @@ describe("INV-6 - escape by construction", () => {
     expect(uses[0]).toContain("SKIN_PICKER_SCRIPT");
   });
 
-  it("the skin picker script itself interpolates only the hardcoded registry", () => {
+  it("the skin picker script itself interpolates only hardcoded module constants", () => {
     const src = read(join(ROOT, "lib/skins.ts"));
-    const script = src.slice(src.indexOf("SKIN_PICKER_SCRIPT"));
+    const script = src.slice(src.indexOf("export const SKIN_PICKER_SCRIPT"));
     const interpolations = script.match(/\$\{[^}]*\}/g) ?? [];
-    // JSON.stringify over two module-level constants. Nothing else may enter.
-    expect(interpolations.every((i) => i.includes("JSON.stringify"))).toBe(true);
-    expect(interpolations.every((i) => /SKINS|LAYOUTS/.test(i))).toBe(true);
+    expect(interpolations.length).toBeGreaterThan(0);
+
+    // The script is inlined into <head>, so anything interpolated into it is
+    // effectively trusted code. Only these module-level constants may enter --
+    // no request data, no storage value, no engine response.
+    const ALLOWED = /^\$\{(JSON\.stringify\((SKIN_IDS|LAYOUTS|FONT_PAIRS|STORAGE_KEYS\.\w+)\)|SESSION_VERSION)\}$/;
+    const rogue = interpolations.filter((i) => !ALLOWED.test(i));
+    expect(rogue).toEqual([]);
+  });
+
+  it("the picker's runtime inputs are all validated against the registry", () => {
+    // ?skin=, the lock and the restored session record are the three values
+    // that come from outside the module. Each is checked before it is applied.
+    const src = read(join(ROOT, "lib/skins.ts"));
+    for (const guard of [
+      "ids.indexOf(forced)>=0",
+      "ids.indexOf(lock)>=0",
+      "ids.indexOf(o.skin)>=0",
+      "layouts.indexOf(o.layout)>=0",
+      "fonts.indexOf(o.fontPair)>=0",
+    ]) {
+      expect(src).toContain(guard);
+    }
   });
 
   /**
