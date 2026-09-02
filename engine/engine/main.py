@@ -21,6 +21,7 @@ from starlette.requests import Request
 from .logging_config import configure_logging
 from .routers import (actors, audit, extract, feed, fusion, geo, graph, health, infra,
                       sources, style, tor)
+from .routers import admin as admin_router
 from .routers import chainflow as chainflow_router
 from .scheduler import start_scheduler, stop_scheduler
 from .settings import get_settings
@@ -111,6 +112,10 @@ def create_app() -> FastAPI:
     app.include_router(actors.router)
     app.include_router(tor.router)
     app.include_router(chainflow_router.router)
+    # The admin scope authorises INDEPENDENTLY of the web proxy (DEC-060):
+    # every handler verifies a signed service token and checks the role against
+    # the engine's own table. It is mounted last so it is visibly separate.
+    app.include_router(admin_router.router)
     return app
 
 

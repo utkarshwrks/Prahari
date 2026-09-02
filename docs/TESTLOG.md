@@ -1076,3 +1076,115 @@ a substitute for `tsc --noEmit` over the whole tree.
 **PHASE 3 GATE: GREEN.** Eleven views, all captioned, fallback intact and
 announced, exports carry provenance, determinism proven in the browser.
 **DEC-057.**
+
+---
+
+## v2.1 Phase 4 — the Command Panel
+
+| Check | Phase 3 | Phase 4 | Result |
+|---|---|---|---|
+| `npm test` | 373 passed | **885 passed** (22 files) | **PASS** |
+| `npm run lint` | clean | clean | **PASS** |
+| `npm run build` | clean | clean, `/command` 106 kB | **PASS** |
+| `uv run pytest -q` | 239 / 17 skipped | **401 passed** / 17 skipped | **PASS** |
+| `journey.mjs` | 90/90 | **108/108** (18 new panel checks) | **PASS** |
+| `forge test` | not run | not run | **CONDITION** |
+
+**Total: 1,394 green** (885 web · 401 engine · 108 e2e).
+
+### The authZ matrix — the phase's most important file
+
+`authz.test.ts` is **351 assertions**, generated rather than listed: five roles ×
+twenty-four routes, plus hierarchy, freshness and traversal cases. Adding a
+route to `ADMIN_ROUTES` automatically adds five rows. A hand-written list of
+expected 403s drifts the moment a route is added, and drifts *silently*, because
+the new route simply is not in the list.
+
+`engine/tests/test_admin_auth.py` walks the same matrix **from the engine side**,
+never through the proxy — exactly as an attacker who found the engine's public
+URL would.
+
+### New coverage
+
+| File | Tests | Covers |
+|---|---|---|
+| `authz.test.ts` | 351 | Every role × every route; hierarchy is strictly increasing; `analyst`/`officer` unchanged; only admin holds the three management permissions; no role holds any `impersonate`; step-up freshness; **traversal refusal (FINDING-08)** |
+| `totp.test.ts` | 50 | Enrolment; single-use codes; ±1 drift and no more; replay across the adjacent window; bounded spent-code list; recovery codes hashed, single-use, pepper-dependent; the server-side token store |
+| `sessionSecurity.test.ts` | 51 | Unknown session treated as revoked; absolute cap; revoke-all on role change; CSRF binding and tampering; bcrypt cost 12 with legacy-hash acceptance; password policy; IP allowlist fail-closed; per-surface rate-limit keys |
+| `serviceToken.test.ts` | 22 | Wire format; expiry; tampered payload; **request binding**; the engine mirrors the algorithm and claim names |
+| `adminReports.test.ts` | 37 | FINDING-02 payload set through **all four** new report paths; the anchor rule; "not measured" never rendered as 0.000; credentials never rendered; failed chain verification leads |
+| `test_admin_auth.py` | 162 | The engine-side matrix; token binding; soft-delete and export survival; optimistic concurrency; ledger coverage; override justification; dry-run purge and two-person rule; bulk import |
+
+### New e2e coverage — 18 checks
+
+```
+PASS  the panel reports a role and its permissions — admin · 13 permissions
+PASS  a write with no CSRF token is refused — 403 csrf
+PASS  an unknown admin route is 404, not 403 — 404 unknown-route
+PASS  a write with no step-up is refused — 403 step-up-required
+PASS  enrolment returns a QR, an otpauth URI and eight recovery codes
+PASS  a valid code grants a step-up — totp
+PASS  the SAME code is refused as a replay — 403 replayed
+PASS  the write now succeeds and returns its ledger entry — seq 2
+PASS  a delete is SOFT and says so
+PASS  every mutation appears in the signed audit chain — 4 records
+PASS  the chain is hash-linked and rooted
+PASS  the records table renders real rows — 50 rows
+PASS  analytics distinguishes measured from unmeasured
+PASS  signal contribution reports survived versus discarded
+PASS  the audit chain view reads from the chain itself
+PASS  the step-up prompt is a real modal dialog
+PASS  focus moves into the step-up dialog
+PASS  Escape closes the step-up dialog
+```
+
+The refuse → enrol → verify → **replay-refused** → write → soft-delete → chain
+sequence is the whole security model exercised in one pass, in a real browser,
+against a real engine.
+
+### Four defects found while building
+
+1. **FINDING-08 — privilege escalation by path traversal.**
+   `users/../retention/purge` matched the `users` rule via `startsWith`, so it
+   authorised under `manage:users` while a normalising consumer would execute
+   `retention/purge` (`manage:retention`). Found by the generated matrix; nobody
+   would have written that case by hand. Fixed by **refusing** traversal input
+   rather than normalising it.
+2. **The injected clock did not reach the crypto.** `verifyStepUp`'s `atMs`
+   drove replay bookkeeping but not `authenticator.check`, which verifies against
+   the real clock — so a code from two windows ago verified as valid. Surfaced
+   only because writing the drift tests exposed that
+   `authenticator.generate(secret, { epoch })` silently ignores its second
+   argument.
+3. **`Secure` keyed to `NODE_ENV` broke login entirely.** `next start` sets
+   production, so a production build over plain HTTP marked the cookie Secure,
+   the browser dropped it, and login redirect-looped. Every local run, every CI
+   run, and the first boot of a deployment before TLS. `Secure` now follows
+   `NEXTAUTH_URL`'s scheme.
+4. **A missing `ENGINE_SERVICE_SECRET` surfaced as a bare 500.** The refusal is
+   correct; the presentation was not. It is now a 503 naming the variable and
+   what to do (INV-9).
+
+### What is NOT built
+
+Stated rather than implied:
+
+- **User CRUD is read-only in this phase.** `GET /admin/users` works and is
+  role-gated; invite, disable, reset-TOTP and revoke-sessions are declared in the
+  authorisation table but their handlers are not written. The last-admin
+  protection and self-role-change refusal are therefore **not implemented**, and
+  their tests are absent rather than passing vacuously. The route table already
+  guards them at `manage:roles` with a destructive fresh-step-up requirement, so
+  adding the handlers is additive.
+- **Persona merge/split** are not implemented; the ledger actions
+  (`admin.merge`, `admin.split`) are reserved.
+- **Scheduled report generation** is not implemented. The playbook permits it
+  only as a GitHub Actions cron writing an artifact; that belongs with Phase 7's
+  workflow work.
+
+### Verdict
+
+**PHASE 4 GATE: GREEN, with the user-management surface explicitly unbuilt.**
+AuthZ matrix green (351 + 162 assertions, both sides), TOTP green including
+replay and drift, every mutation in the signed chain, zero `innerHTML` /
+`document.write` in the tree. **DEC-058, DEC-059, DEC-060.**

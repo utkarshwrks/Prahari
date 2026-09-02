@@ -37,7 +37,20 @@ GENESIS = "0x" + "00" * 32
 # written to the ledger at all - the set is closed on purpose.
 ACTIONS = (
     "confirm", "reject", "assign", "note", "seal", "export", "score",
+    # --- Command Panel mutations (DEC-060) ---
+    #
+    # EXTENDED, not bypassed. Admin actions are the most important thing in this
+    # chain, and the set stays closed: an action absent from this tuple still
+    # cannot be written at all, so a new admin operation has to be added here
+    # deliberately and is impossible to forget.
+    "admin.create", "admin.update", "admin.delete", "admin.restore",
+    "admin.merge", "admin.split", "admin.redact", "admin.override",
+    "admin.role", "admin.invite", "admin.disable", "admin.revoke",
+    "admin.reset_totp", "admin.source", "admin.bulk_import", "admin.purge",
 )
+
+#: The subset that only an admin scope may write.
+ADMIN_ACTIONS = tuple(a for a in ACTIONS if a.startswith("admin."))
 
 
 def keccak256(data: bytes) -> str:

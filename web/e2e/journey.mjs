@@ -365,6 +365,173 @@ const run = async () => {
   log("focus returns to the control that opened the palette", restored.ok, String(restored.why));
   }
 
+  // ------------------------------------------- the command panel (DEC-058/059/060)
+  console.log("\n== COMMAND PANEL (DEC-058, DEC-059, DEC-060) ==");
+
+  const panelOn = await (async () => {
+    const r = await page.goto(`${BASE}/command`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(3500);
+    if (!r || r.status() >= 400) return false;
+    return page.evaluate(() => document.body.innerText.includes("COMMAND PANEL"));
+  })();
+
+  if (!panelOn) {
+    log("flag off: /command says it is not enabled rather than 404ing",
+        await page.evaluate(() => document.body.innerText.includes("not enabled")));
+    for (const line of [
+      "authZ refusals — command flag off",
+      "step-up and replay — command flag off",
+      "ledger coverage — command flag off",
+    ]) {
+      console.log(`  SKIP  ${line}`);
+    }
+  } else {
+    const status = await page.evaluate(async () =>
+      (await fetch("/api/stepup/status", { cache: "no-store" })).json()
+    );
+
+    /**
+     * A unique record id per run.
+     *
+     * The engine's admin store is in-memory and lives for the life of the
+     * process, so a fixed id made the create return 409 "already exists" on
+     * every run after the first -- correct behaviour from the engine, and a
+     * flaky test. A journey that only passes against a freshly started engine
+     * is not a gate.
+     */
+    const RID = `journey-${Date.now().toString(36)}`;
+    log("the panel reports a role and its permissions",
+        Boolean(status.role) && (status.permissions ?? []).length > 0,
+        `${status.role} · ${(status.permissions ?? []).length} permissions`);
+
+    const post = (path, body, csrf) =>
+      page.evaluate(
+        async ([p, b, c]) => {
+          const r = await fetch(p, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...(c ? { "x-prahari-csrf": c } : {}) },
+            body: JSON.stringify(b),
+          });
+          return { status: r.status, body: await r.json().catch(() => ({})) };
+        },
+        [path, body, csrf]
+      );
+
+    // --- the refusals, in order ---
+    const noCsrf = await post(`/api/admin/personas?id=${RID}`, { patch: {} }, null);
+    log("a write with no CSRF token is refused", noCsrf.status === 403 && noCsrf.body.error === "csrf",
+        `${noCsrf.status} ${noCsrf.body.error}`);
+
+    const unknown = await page.evaluate(async () => {
+      const r = await fetch("/api/admin/nonsense", { cache: "no-store" });
+      return { status: r.status, body: await r.json().catch(() => ({})) };
+    });
+    log("an unknown admin route is 404, not 403", unknown.status === 404,
+        `${unknown.status} ${unknown.body.error}`);
+
+    const noStepUp = await post(`/api/admin/personas?id=${RID}`, { patch: { handle: "x" } }, status.csrf);
+    const refusedForStepUp = noStepUp.status === 403 &&
+      ["step-up-required", "insufficient-role"].includes(noStepUp.body.error);
+    log("a write with no step-up is refused", refusedForStepUp,
+        `${noStepUp.status} ${noStepUp.body.error}`);
+
+    // --- enrolment, verification, replay ---
+    const enrol = await post("/api/stepup/enrol", { force: true }, status.csrf);
+    const canStepUp = enrol.status === 200 && Boolean(enrol.body.uri);
+    log("enrolment returns a QR, an otpauth URI and eight recovery codes",
+        canStepUp && Boolean(enrol.body.qr) && (enrol.body.recoveryCodes ?? []).length === 8);
+
+    if (canStepUp && noStepUp.body.error === "step-up-required") {
+      const { authenticator } = await import("otplib");
+      const secret = new URL(enrol.body.uri).searchParams.get("secret");
+      const code = authenticator.generate(secret);
+
+      const verify = await post("/api/stepup/verify", { code }, status.csrf);
+      log("a valid code grants a step-up", verify.status === 200 && verify.body.ok === true,
+          String(verify.body.via ?? verify.body.detail));
+
+      const replay = await post("/api/stepup/verify", { code }, status.csrf);
+      log("the SAME code is refused as a replay",
+          replay.status === 403 && replay.body.reason === "replayed",
+          `${replay.status} ${replay.body.reason}`);
+
+      const write = await post(
+        `/api/admin/personas?id=${RID}`,
+        { patch: { handle: "journey" }, reason: "e2e journey" },
+        status.csrf
+      );
+      log("the write now succeeds and returns its ledger entry",
+          write.status === 200 && String(write.body?.ledger?.hash ?? "").startsWith("0x"),
+          `${write.status} seq ${write.body?.ledger?.seq}`);
+
+      const del = await page.evaluate(async ([csrf, rid]) => {
+        const r = await fetch(`/api/admin/personas/${rid}`, {
+          method: "DELETE",
+          headers: { "x-prahari-csrf": csrf },
+        });
+        return { status: r.status, body: await r.json().catch(() => ({})) };
+      }, [status.csrf, RID]);
+      log("a delete is SOFT and says so",
+          del.status === 200 && Boolean(del.body?.record?.deleted_at) &&
+          /remains in exports/i.test(String(del.body?.honesty ?? "")));
+
+      const chain = await page.evaluate(async () =>
+        (await fetch("/api/admin/audit/activity", { cache: "no-store" })).json()
+      );
+      log("every mutation appears in the signed audit chain",
+          chain.ok && chain.count >= 2 && chain.records.every((r) => r.signed),
+          `${chain.count} records`);
+      log("the chain is hash-linked and rooted",
+          chain.records[0].prev_hash.startsWith("0x") &&
+          String(chain.merkle_root ?? "").startsWith("0x"));
+    } else {
+      console.log("  SKIP  step-up flow — this role cannot reach a step-up-guarded write");
+    }
+
+    // --- the panel renders its surfaces ---
+    await page.goto(`${BASE}/command`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(4500);
+    const rows = await page.locator("[data-testid=command-rows] tr").count();
+    log("the records table renders real rows", rows > 0, `${rows} rows`);
+
+    await page.evaluate(() => {
+      [...document.querySelectorAll("button")]
+        .find((b) => /analytics/i.test(b.textContent ?? ""))?.click();
+    });
+    await page.waitForTimeout(3500);
+    const analyticsText = await page.evaluate(() => document.body.innerText);
+    log("analytics distinguishes measured from unmeasured",
+        /Measured/i.test(analyticsText) && /Unmeasured/i.test(analyticsText));
+    log("signal contribution reports survived versus discarded",
+        /survived/i.test(analyticsText) && /discarded/i.test(analyticsText));
+
+    await page.evaluate(() => {
+      [...document.querySelectorAll("button")]
+        .find((b) => /audit chain/i.test(b.textContent ?? ""))?.click();
+    });
+    await page.waitForTimeout(3000);
+    log("the audit chain view reads from the chain itself",
+        await page.evaluate(() => document.body.innerText.includes("hash-linked")));
+
+    // --- the step-up dialog reuses the DEC-042 focus trap ---
+    await page.evaluate(() => {
+      [...document.querySelectorAll("button")]
+        .find((b) => /step up|enrol/i.test(b.textContent ?? ""))?.click();
+    });
+    await page.waitForTimeout(900);
+    log("the step-up prompt is a real modal dialog",
+        (await page.locator('[role="dialog"][aria-modal="true"]').count()) > 0);
+    const trapped = await page.evaluate(() => {
+      const d = document.querySelector('[role="dialog"]');
+      return Boolean(d && d.contains(document.activeElement));
+    });
+    log("focus moves into the step-up dialog", trapped);
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(600);
+    log("Escape closes the step-up dialog",
+        (await page.locator('[role="dialog"]').count()) === 0);
+  }
+
   // ------------------------------------------- the graph lab (DEC-057)
   console.log("\n== GRAPH INTELLIGENCE LAB (DEC-057) ==");
 

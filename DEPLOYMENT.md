@@ -165,3 +165,49 @@ Nothing here costs money. The only human-gated steps are creating the Vercel/
 Render accounts and the faucet click — an assistant cannot create accounts, grant
 OAuth, or solve a faucet captcha on your behalf, so those three clicks are yours;
 every file, command and env var they need is above.
+
+---
+
+## Command Panel (v2.1 Phase 4)
+
+The management surface is **off by default** and needs three secrets before it
+will serve anything. Without them it refuses with a 503 that names the missing
+variable — it does not silently fall back.
+
+| Variable | Where | Why |
+|---|---|---|
+| `NEXTAUTH_SECRET` | web | Session signing (DEC-045). Production refuses the committed dev default separately. |
+| `PASSWORD_PEPPER` | web | Peppers bcrypt, so a database dump alone is not enough to start guessing (DEC-058). |
+| `ENGINE_SERVICE_SECRET` | **web AND engine** | The engine verifies admin calls independently (DEC-060). The two values MUST match, or every admin call answers 401. |
+| `NEXT_PUBLIC_FF_COMMAND=1` | web | Turns the panel on. Build-time. |
+| `ADMIN_IP_ALLOWLIST` | web, optional | Comma-separated CIDRs. Unset allows everything; set-but-unidentifiable **refuses**. |
+| `DEMO_ROLE` | web, optional | Role for the seeded demo account. Defaults to `officer`, and is bounded by `ENABLE_DEMO_ACCOUNT`, which is off in production. |
+
+Generate each with `openssl rand -base64 32`.
+
+### Before turning it on
+
+1. Set all three secrets. `ENGINE_SERVICE_SECRET` on **both** services.
+2. Every user who will make a change must enrol an authenticator — the panel
+   offers enrolment on first use and shows eight recovery codes **once**.
+3. `web/data/totp.json` holds the enrolments. It is gitignored and written 0600.
+   Back it up like a credential store; losing it means every user re-enrols.
+4. Behind a proxy, ensure it **overwrites** `x-forwarded-for`. The IP allowlist
+   reads that header and it is spoofable by anything that can reach the app
+   directly. It is defence in depth, never the only gate.
+
+### The single-node limitation, stated
+
+The step-up store, the session registry and the rate limiter are all in-process
+(DEC-046). Behind several instances:
+
+- a step-up proved on one node is unknown to the others, so the analyst is asked
+  for a second code — annoying, and it fails **closed**;
+- each process keeps its own rate-limit window, so the effective limit multiplies
+  by instance count;
+- a restart logs everyone out, because an unknown session id is treated as
+  revoked.
+
+Correct for a single-node district deployment. A scaled one needs a shared
+store, and the playbook forbids Redis — so that is a deliberate open item, not
+an oversight.

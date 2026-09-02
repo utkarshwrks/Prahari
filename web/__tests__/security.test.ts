@@ -147,9 +147,53 @@ describe("INV-2 - the browser never holds the engine URL or a key", () => {
     expect(offenders.map(rel)).toEqual([]);
   });
 
-  it("ENGINE_URL is read in the proxy only", () => {
+  const ADMIN_PROXY = "app/api/admin/[...path]/route.ts";
+
+  it("ENGINE_URL is read in the two server-side proxies and nowhere else", () => {
+    // TWO proxies as of DEC-060, deliberately separate. The read proxy is an
+    // allowlist for signed-in analysts; the admin proxy adds role, CSRF,
+    // step-up, rate limit and a ledger entry. Merging them would mean one
+    // function whose behaviour depends on which arm of a branch it took, and
+    // the failure mode of getting that branch wrong is an unauthenticated purge.
     const readers = SOURCES.filter((f) => /process\.env\.ENGINE_URL/.test(read(f)));
-    expect(readers.map(rel)).toEqual([PROXY]);
+    expect(readers.map(rel).sort()).toEqual([ADMIN_PROXY, PROXY].sort());
+  });
+
+  it("the read proxy cannot reach the admin scope", () => {
+    const src = read(join(ROOT, PROXY));
+    const block = src.slice(src.indexOf("const ALLOWED"), src.indexOf("];", src.indexOf("const ALLOWED")));
+    expect(block).not.toContain("admin");
+  });
+
+  it("every admin request goes through the server-side guard", () => {
+    const src = read(join(ROOT, ADMIN_PROXY));
+    expect(src).toContain("await guard(req, path)");
+    // The guard's refusal must short-circuit before anything is forwarded.
+    expect(src).toMatch(/if \(!g\.ok\)\s*\{\s*return refuse\(/);
+  });
+
+  it("the admin proxy derives its allowlist from the authorisation table", () => {
+    // Deriving rather than restating means a route can never be reachable
+    // without a rule, nor have a rule without being reachable. Both mismatches
+    // are silent in a hand-maintained pair of lists.
+    const src = read(join(ROOT, ADMIN_PROXY));
+    expect(src).toContain("ADMIN_ROUTES.map");
+  });
+
+  it("the engine authorises independently of the proxy", () => {
+    const src = read(join(ROOT, ADMIN_PROXY));
+    // A signed, request-bound token, because on Render the engine has its own
+    // public URL and cannot assume this proxy is the only caller.
+    expect(src).toContain("serviceToken(");
+    expect(src).toContain("Authorization");
+  });
+
+  it("no secret-bearing module can reach a client bundle", () => {
+    // `server-only` is aliased away in vitest (it has no runtime behaviour), so
+    // the guarantee is asserted here and enforced by `next build`.
+    for (const f of ["lib/totp.ts", "lib/totpStore.ts", "lib/passwords.ts", "lib/serviceToken.ts", "lib/sessions.ts", "lib/adminGuard.ts"]) {
+      expect(read(join(ROOT, f)), f).toContain('import "server-only"');
+    }
   });
 
   it("no client component reads a secret from the environment", () => {

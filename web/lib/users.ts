@@ -22,11 +22,25 @@ const USERS_FILE = path.join(DATA_DIR, "users.json");
 export const DEMO_EMAIL = "analyst@prahari.local";
 export const DEMO_PASSWORD = "prahari123";
 
+/**
+ * The seeded account's role.
+ *
+ * Defaults to `officer`, exactly as before -- nothing about an existing
+ * deployment changes. `DEMO_ROLE` exists so the Command Panel can be shown at
+ * all: it needs `manage:cases` or `manage:users`, which an officer correctly
+ * does not hold, and hard-coding a higher role would have quietly widened what
+ * the demo account can do (DEC-058).
+ *
+ * It is bounded by DEMO_ACCOUNT_ENABLED, which is already off in production, so
+ * this cannot promote anyone on a real deployment.
+ */
+const DEMO_ROLE = process.env.DEMO_ROLE?.trim() || "officer";
+
 const DEMO_USER: AppUser = {
   id: "demo-officer",
   email: DEMO_EMAIL,
   name: "Demo analyst",
-  role: "officer",  // may seal and export; see ROLE_PERMISSIONS
+  role: DEMO_ROLE,  // may seal and export; see ROLE_PERMISSIONS
   // hashed once per process from the constant above
   passwordHash: bcrypt.hashSync(DEMO_PASSWORD, 10),
 };

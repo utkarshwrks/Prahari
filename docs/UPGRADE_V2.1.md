@@ -341,6 +341,76 @@ committed env file, so a fresh clone still gets the Phase 2 full-viewport panel.
 
 ### Next
 
-**Phase 4 — the Command Panel.** Security first: role hierarchy, TOTP step-up, session hardening,
-CRUD, reports and analytics. The playbook's instruction for this phase is explicit — if the hardening
-cannot be finished, ship **nothing** of it.
+**Phase 4 — the Command Panel.**
+
+---
+
+## Phase 4 — The Command Panel
+
+**Status: COMPLETE, with the user-management surface explicitly unbuilt. DEC-058, DEC-059, DEC-060.**
+
+| Check | Phase 3 | Phase 4 |
+|---|---|---|
+| `npm test` | 373 | **885 passed** |
+| `uv run pytest -q` | 239 / 17 skipped | **401 passed** / 17 skipped |
+| `journey.mjs` | 90/90 | **108/108** |
+| `npm run lint` / `build` | clean | clean; `/command` 106 kB |
+| `forge test` | not run | not run — same stated condition |
+
+**1,394 green.**
+
+### What changed
+
+**Security first — the phase's own rule is that a half-secured panel is worse than none.**
+
+1. **`lib/rbac.ts`** — five roles as a strict hierarchy, `analyst`/`officer` unchanged, and ONE
+   authorisation table walked exhaustively by a 351-assertion generated matrix.
+2. **`lib/totp.ts`** — RFC 6238 step-up with single-use codes, ±1 drift, hashed single-use recovery
+   codes, and a server-side token store. Destructive actions need a **fresh** (120 s) step-up.
+3. **`lib/sessions.ts`** — absolute 8-hour cap, a registry where an unknown session is treated as
+   revoked, revoke-all on role change, and session-bound CSRF.
+4. **`lib/passwords.ts`** — bcrypt cost 12 + pepper, legacy hashes still accepted, offline breach list.
+5. **`lib/adminGuard.ts`** — the control. IP allowlist → session → CSRF → role → step-up → rate limit.
+6. **`app/api/admin/[...path]`** — a SECOND proxy, separate by design; `/admin` never enters the read
+   proxy's allowlist.
+7. **`engine/admin/`** — the engine verifies a request-bound signed token and re-checks the role
+   against its own table.
+8. **CRUD** — soft-delete only, optimistic concurrency, every mutation returns its diff and lands in
+   the signed ledger. Dry-run-first bulk import and retention purge, the latter with a two-person rule.
+9. **Reports and analytics** — four new reports on the existing `createElement` path, signal
+   contribution, and honest "not measured" everywhere.
+
+### Four defects found while building
+
+- **FINDING-08:** `users/../retention/purge` authorised as `users` — privilege escalation by
+  traversal, found by the generated matrix.
+- The step-up's **injected clock never reached the crypto**, so a two-window-old code verified.
+- **`Secure` keyed to `NODE_ENV` broke login entirely** on any production build served over HTTP.
+- A missing `ENGINE_SERVICE_SECRET` surfaced as a bare 500 rather than a named 503.
+
+### What is NOT built
+
+- **User CRUD is read-only.** Invite/disable/reset-TOTP/revoke-sessions are declared in the
+  authorisation table but have no handlers, so **last-admin protection and self-role-change refusal
+  are not implemented** and their tests are absent rather than vacuously passing.
+- **Persona merge/split** are not implemented; their ledger actions are reserved.
+- **Scheduled reports** belong with Phase 7's GitHub Actions work.
+
+### Rollback
+
+```bash
+git revert <phase-4-sha>
+```
+
+### Flag state
+
+`NEXT_PUBLIC_FF_COMMAND=1` in `web/.env.local` — **on**, its gate having passed. Not set in any
+committed env file. The panel additionally needs `ENGINE_SERVICE_SECRET` (matching on both services)
+and `PASSWORD_PEPPER`; without them it refuses with a 503 naming the variable.
+
+### Next
+
+**Phase 5 — SANGAM Pro.** The three-class coordinate model (RESOLVED / DERIVED / UNAVAILABLE), ten
+layers, and the clickable resolution chain. **FINDING-06 lands here** — `lib/geoderive.ts` still emits
+a Binance off-ramp for every actor, stamped `inferred: false`; its two `it.fails` tests flip green the
+moment it is fixed.

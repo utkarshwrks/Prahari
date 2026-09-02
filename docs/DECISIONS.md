@@ -1050,3 +1050,231 @@ list, with a banner saying which condition applied. Information always survives
 
 **Measured:** 373 web unit tests, 19 new e2e checks, all eleven views captioned
 and exception-free, `/workbench/actor/[id]/graph` 123 kB first-load JS.
+
+---
+
+## v2.1 Upgrade — Phase 4
+
+### DEC-058 — Five roles, one authorisation table, three enforcement layers.
+
+The playbook's warning for this phase is blunt: *a half-secured admin panel is a
+worse outcome than no admin panel.* So the order of work was security first, and
+the panel exists only because the hardening finished.
+
+**The hierarchy** extends `officer` / `analyst` without touching either — both
+keep exactly the permissions they had, spread from `authConfig.ROLE_PERMISSIONS`
+rather than retyped so the two files cannot drift:
+
+```
+viewer     read
+analyst    read, investigate, verify                                  (unchanged)
+officer    + assign, seal, export                                     (unchanged)
+supervisor + manage:cases, manage:sources, approve, reassign
+admin      + manage:users, manage:roles, manage:retention
+```
+
+It is a strict hierarchy and a test asserts that. A hole in it — a supervisor
+who cannot do something an officer can — turns every permission question into a
+special case.
+
+**`impersonate:none` was not implemented as a permission.** The playbook lists
+it for admin; minting a permission whose *value* is the string "none" would make
+`hasPermission(role, "impersonate:none")` return **true**, the exact opposite of
+the intent. The capability does not exist anywhere in the table, and a test
+asserts no role holds any `impersonate` permission.
+
+**One table, three layers.** `ADMIN_ROUTES` is data, not scattered `if`
+statements, precisely so it can be walked exhaustively:
+
+1. `middleware.ts` adds `/command` as a ROUTE guard. It runs on the Edge
+   runtime, which cannot read the in-process step-up store or the session
+   registry, so all it can honestly do is refuse traffic with no session — and
+   that is all it is asked to do.
+2. `lib/adminGuard.ts` is **the control**, on the Node side. Order is asserted:
+   IP allowlist → session → CSRF → role → step-up → rate limit. The allowlist is
+   first because a deployment that restricted the panel to an office range
+   should not be spending bcrypt or ledger writes on traffic it already refused;
+   the rate limit is last because a refusal above it should not consume anyone's
+   budget.
+3. The **engine authorises independently** (DEC-060).
+
+The UI hides what a role cannot do. That is a courtesy, not a control, and the
+authZ matrix is what proves the difference.
+
+#### FINDING-08 — a privilege-escalation shape, found by the matrix
+
+`users/../retention/purge` matched the `users` rule through the
+`startsWith("users/")` prefix test. It would have been authorised under
+`manage:users` while any consumer that normalised the path would then execute
+`retention/purge`, which requires `manage:retention`. **Authorise as one route,
+execute as another.**
+
+Fixed by **refusing** traversal input rather than normalising it: normalising
+means the guard and its consumer must agree forever on one canonical form, and
+any future disagreement is another instance of this bug. A traversal segment has
+no legitimate use in an admin path.
+
+This is the entire argument for generating the matrix instead of listing the
+cells someone thought of. Nobody would have written that test case by hand.
+
+#### Credentials
+
+bcrypt cost **10 → 12** (~4x the work per guess; ~250 ms per login, which nobody
+notices and an offline cracker does), plus a **pepper** from the environment so
+a database dump alone is not enough to start guessing. Existing hashes keep
+working — bcrypt encodes its cost, an un-peppered hash is accepted on a second
+comparison, and the result says `needsRehash` so it is upgraded on the owner's
+next login. The prime directive applies to credentials too.
+
+The policy runs on **set and reset only, never on login**: an existing password
+that no longer meets policy must still let its owner in so they can change it.
+Length ≥ 12 and an **offline** breach-list check — no composition theatre.
+"One uppercase and one symbol" pushes people to `Password1!` and buys nothing.
+The list is one password per line and nothing else: a data file with a syntax is
+a data file that can be got wrong, and a comment line silently treated as a
+forbidden password would be invisible.
+
+---
+
+### DEC-059 — Step-up TOTP, and a session model that can actually be revoked.
+
+The threat is specific: a session cookie taken from an unlocked laptop, or an
+analyst who walked away. A password protects login; nothing protected the
+mutations after it. `otplib` (MIT) does the RFC 6238 arithmetic; everything
+around it is ours, because those are the parts that get security wrong.
+
+**Four properties, each with a test that would fail loudly:**
+
+1. **Single-use codes.** Accepting the same six digits twice inside their window
+   means a shoulder-surfed code works for whoever saw it. Replay protection
+   spans the same ±1 window the drift allowance does — otherwise the code simply
+   works thirty seconds later.
+2. **Drift is ±1 window.** Wider is friendlier and materially weaker: every
+   extra window is another thirty seconds of validity for an observed code.
+3. **Recovery codes hashed at rest and single-use.** SHA-256 with the pepper,
+   not bcrypt: they are ~50 bits from a CSPRNG, so they are not brute-forceable
+   from a hash the way a human password is, and a fast hash means verifying eight
+   of them opens no CPU-exhaustion path. Alphabet excludes `0 O 1 I L`.
+4. **The token lives server-side against the session.** The verify endpoint
+   returns *no token*: the grant is recorded against the session id the browser
+   already holds in its httpOnly cookie. There is deliberately nothing for a
+   client to store, replay or forge.
+
+**Destructive actions need a FRESH step-up** — 120 seconds, not the 15-minute
+window. For an irreversible action, "fourteen minutes ago" is not proof that the
+person is at the keyboard now.
+
+#### A bug the injected clock hid
+
+`verifyStepUp(state, code, pepper, atMs)` used `atMs` for the replay bookkeeping
+but **not for the cryptographic check** — otplib verifies against its own epoch,
+which defaults to the real clock. A code generated for two windows ago verified
+as valid. Found by the drift tests, and only because writing them exposed that
+`authenticator.generate(secret, { epoch })` silently ignores its second
+argument. The epoch is now set and restored around both calls, in a `finally`
+so a throw cannot leave a stale epoch behind for the next caller.
+
+#### Sessions
+
+Short JWT (15 min rotation) inside an **absolute 8-hour cap** — one shift, so a
+session left open overnight is not valid in the morning. A registry gives
+revocation real teeth: **an unknown session id is treated as revoked**, which is
+the fail-closed direction. Trusting any well-signed token whose session we have
+no record of would make the revocation list decorative. Role change and password
+reset revoke every session the user holds, because a demoted user keeping their
+old permissions until a token expires is the thing this exists to prevent.
+
+CSRF is a double-submit token **derived** from the session id and the secret
+rather than stored, so there is no second registry to keep in step. `SameSite=Lax`
+already blocks plain cross-site form posts; this is the second layer, because Lax
+has real gaps and these mutations cannot be undone.
+
+#### A bug my own hardening introduced, and how it surfaced
+
+I set the session cookie's `Secure` attribute from `NODE_ENV`. `next start` sets
+`NODE_ENV=production`, so a production build served over plain HTTP — every local
+run, every CI run, and the first boot of a deployment before TLS is in front of
+it — marked the cookie Secure, the browser dropped it, and **login silently
+bounced back to `/login` in a redirect loop**. Found by pointing the browser
+journey at a production build.
+
+`Secure` now follows `NEXTAUTH_URL`'s scheme, which is the authoritative
+statement of how the app is actually reached. The `__Secure-` name prefix is
+tied to the same value, because browsers reject that prefix on a cookie that is
+not Secure and the two must agree.
+
+---
+
+### DEC-060 — The engine authorises admin calls independently of the proxy.
+
+*"The web proxy already checked"* is not an authorisation model. On a Render
+deployment the engine has its own public URL, so anything that can reach the
+network can reach `/admin/*` directly.
+
+**A second proxy, deliberately separate.** `/api/admin/[...path]` is not a
+branch inside the existing read proxy. Admin paths mutate evidence and need a
+role check, CSRF, step-up, a rate limit and a ledger entry; bolting that onto
+the read proxy would mean one function whose behaviour depends on which arm of a
+branch it took, and the failure mode of getting that branch wrong is an
+unauthenticated purge. `/admin` is **not** in the read proxy's `ALLOWED` array
+and a test asserts it never becomes so. The admin proxy's allowlist is *derived*
+from `ADMIN_ROUTES`, so a route can never be reachable without a rule nor have a
+rule without being reachable.
+
+**The service token is bound to the request.** HMAC-SHA256 over five claims plus
+path and method, 60-second life. A token minted for `GET /admin/users` cannot be
+replayed against `POST /admin/retention/purge` — without that binding, a token
+captured from any admin read would be a general-purpose admin credential for its
+lifetime. The engine's `admin/auth.py` verifies it and re-checks the role
+against **its own copy** of the permission table: an engine that asked the web
+layer what a role may do would be trusting the thing it is meant to be checking.
+Tests on both sides assert the two tables have not drifted.
+
+A missing `ENGINE_SERVICE_SECRET` in production is a refusal, like DEC-045's
+secret — but the proxy turns the throw into a **503 naming what is missing**
+rather than an unhandled 500 with a stack trace in the log and nothing on screen
+(INV-9).
+
+#### CRUD: three rules
+
+1. **Nothing is ever hard-deleted.** Delete sets `deleted_at` and `deleted_by`.
+   Deleted rows disappear from reads and **survive in exports** — a record a
+   defence expert cannot find is a record the prosecution looks like it hid. Even
+   a retention purge soft-deletes. There is no hard-delete endpoint.
+2. **Optimistic concurrency.** Every write carries the `updated_at` the client
+   last saw; a mismatch is a 409 naming *both* timestamps, never a silent
+   overwrite.
+3. **Every mutation returns its diff**, and the diff is what goes into the
+   ledger payload. An entry that says "updated" without saying what changed is
+   not evidence of anything.
+
+An attribution override requires a **written justification**, is flagged
+`override: true` with the analyst's name, and can never be mistaken for a model
+output. Bulk import and retention purge are **dry-run by default**; the live
+purge additionally needs a named second approver who is not the caller, because
+one person able to irreversibly remove evidence is the failure this guards
+against, whether the cause is a mistake or coercion.
+
+The ledger's closed action set was **extended, not bypassed**: sixteen
+`admin.*` actions were added to `ACTIONS`, and an action absent from that tuple
+still cannot be written at all.
+
+#### Reports and analytics
+
+Four new reports on the **existing** `lib/report.ts` `createElement` path — no
+new HTML string templating, however convenient, and the FINDING-02 payload set
+runs through every one of them. Each carries the Merkle root, the engine version,
+the generation time, the honesty statement, and a transaction hash **only when a
+public anchor exists** — with an explicit "no public anchor, any seal is local
+only" line when it does not, because silence there would let a reader assume
+otherwise. A failed chain verification leads the subtitle rather than sitting in
+a footnote under a table nobody reaches.
+
+Analytics reports **signal contribution** — how often each root survives collapse
+versus is discarded — which is genuinely diagnostic and which nobody could see
+before. An uncomputable scope answers `available: false` with a reason instead of
+returning zeroes, because a zero is a measurement (INV-5).
+
+**Measured:** 885 web unit tests (including a 351-assertion authZ matrix and 50
+TOTP tests), 401 engine tests, and the full refuse → enrol → verify → replay →
+write → soft-delete → chain flow exercised in a real browser.

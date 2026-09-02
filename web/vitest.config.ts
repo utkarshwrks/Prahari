@@ -25,10 +25,17 @@ export default defineConfig({
       ["__tests__/reportPdf.test.ts", "happy-dom"],
       // GraphML is built with document/XMLSerializer/DOMParser (DEC-057).
       ["__tests__/graphExport.test.ts", "happy-dom"],
+      ["__tests__/adminReports.test.ts", "happy-dom"],
     ],
     include: ["__tests__/**/*.test.ts"],
+    exclude: ["__tests__/stubs/**"],
   },
   resolve: {
-    alias: { "@": path.resolve(__dirname, ".") },
+    alias: {
+      "@": path.resolve(__dirname, "."),
+      // Next provides `server-only`; vitest cannot resolve it and there is
+      // nothing for it to do at runtime. See the stub for why this is safe.
+      "server-only": path.resolve(__dirname, "__tests__/stubs/server-only.ts"),
+    },
   },
 });
