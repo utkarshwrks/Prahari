@@ -12,8 +12,9 @@ VERIFIED FIGURES, from Render's live documentation on 2026-09-03:
 The arithmetic those figures force, for three free services (engine, web, and
 the already-deployed v1):
 
-    750 h / 3 services              = 250 h per service per month
-    250 h / 30.44 days              = 8.2 h per service per day
+    750 h / 2 kept-warm services    = 375 h per service per month
+    375 h / 30.44 days              = 12.3 h per service per day
+    with the 85% guard              = 10.47 h per service per day
     with an 85% guard: 637.5 / 3 / 30.44 = 6.98 h per service per day
 
 So the schedule is a ~7-hour daily warm window, NOT the "12 hours each" the
@@ -42,13 +43,26 @@ FREE_HOURS_PER_MONTH = 750
 #: Idle timeout before spin-down.
 SPIN_DOWN_MINUTES = 15
 
-#: Ping interval. Comfortably under the timeout, with headroom for a skipped
-#: run -- GitHub's cron is best-effort, not guaranteed, and a missed run at a
-#: 14-minute interval would let the service sleep.
-PING_INTERVAL_MINUTES = 10
+#: Ping interval. The interval costs NOTHING -- Render bills hours awake, not
+#: requests -- so it is chosen purely for reliability. At ten minutes one
+#: skipped cron run leaves a 20-minute gap and the service sleeps; GitHub's
+#: scheduler is best-effort and routinely late. Five minutes survives two
+#: consecutive misses against the 15-minute timeout (DEC-067).
+PING_INTERVAL_MINUTES = 5
 
-#: Free services sharing the pool: engine, web, and v1.
+#: Free services sharing the pool: engine, web, and v1. All three consume the
+#: pool whenever they are awake, whoever woke them.
 FREE_SERVICES = ("prahari-v2-engine", "prahari-v2-web", "prahari-6njh")
+
+#: Services this keep-alive actually keeps warm.
+#:
+#: This is the divisor that sets the window length, and it is NOT
+#: len(FREE_SERVICES): v1 is opt-in (PING_V1=0), so only engine and web are
+#: kept warm and the share is 375 h each rather than 250 (DEC-067). It must
+#: track KEPT_WARM in .github/workflows/keepalive.yml -- a test asserts they
+#: agree, because an engine reporting a stricter budget than the workflow
+#: enforces would send anyone reading it to the wrong conclusion.
+KEPT_WARM_SERVICES = int(os.getenv("KEEPALIVE_KEPT_WARM", "2"))
 
 #: Narrow the window at this fraction of the pool; stop entirely at 1.0.
 GUARD_THRESHOLD = 0.85
@@ -60,7 +74,7 @@ STATE_DIR = Path(os.getenv("PRAHARI_CACHE_DIR", ".cache"))
 STATE_FILE = STATE_DIR / "uptime.json"
 
 
-def daily_window_hours(services: int = len(FREE_SERVICES),
+def daily_window_hours(services: int = KEPT_WARM_SERVICES,
                        guard: float = GUARD_THRESHOLD) -> float:
     """Hours per service per day that fit inside the guarded pool."""
     if services <= 0:
@@ -134,7 +148,7 @@ def budget_state(now: float | None = None,
 
     awake_hours = awake_seconds / 3600
     # One service's share of the shared pool.
-    share = FREE_HOURS_PER_MONTH / max(1, len(FREE_SERVICES))
+    share = FREE_HOURS_PER_MONTH / max(1, KEPT_WARM_SERVICES)
     used_pct = round((awake_hours / share) * 100, 1) if share else 0.0
 
     day_ago = now - 86400
@@ -159,8 +173,8 @@ def budget_state(now: float | None = None,
 
 
 #: Warm window, UTC. Sized from the verified budget above (~7 h/service/day).
-WINDOW_START_HOUR = int(os.getenv("KEEPALIVE_WINDOW_START", "4"))
-WINDOW_END_HOUR = int(os.getenv("KEEPALIVE_WINDOW_END", "11"))
+WINDOW_START_HOUR = int(os.getenv("KEEPALIVE_WINDOW_START", "3"))
+WINDOW_END_HOUR = int(os.getenv("KEEPALIVE_WINDOW_END", "13"))
 
 
 def in_window(at: datetime | None = None) -> bool:

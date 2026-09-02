@@ -40,11 +40,45 @@ class TestVerifiedFigures:
     def test_spin_down_is_fifteen_minutes(self):
         assert U.SPIN_DOWN_MINUTES == 15
 
-    def test_the_ping_interval_leaves_headroom_for_a_skipped_run(self):
-        # GitHub's cron is best-effort. At 14 minutes a single missed run would
-        # let the service sleep; at 10, one can be missed and it still holds.
-        assert U.PING_INTERVAL_MINUTES == 10
-        assert U.PING_INTERVAL_MINUTES * 2 <= U.SPIN_DOWN_MINUTES + 5
+    def test_the_ping_interval_leaves_headroom_for_TWO_skipped_runs(self):
+        # The interval costs nothing -- Render bills hours awake, not requests
+        # -- so it is chosen purely for reliability. GitHub's scheduler is
+        # best-effort and routinely late; five minutes survives two consecutive
+        # misses against the 15-minute timeout (DEC-067).
+        assert U.PING_INTERVAL_MINUTES == 5
+        assert U.PING_INTERVAL_MINUTES * 3 <= U.SPIN_DOWN_MINUTES
+
+    def test_only_the_kept_warm_services_divide_the_share(self):
+        """The lever that sets window length.
+
+        Three services share the pool, but the divisor is how many this
+        keep-alive keeps AWAKE. v1 is opt-in, so it is two -- and that single
+        fact is the difference between a seven-hour window and a ten-hour one.
+        """
+        assert U.KEPT_WARM_SERVICES == 2
+        assert U.KEPT_WARM_SERVICES < len(U.FREE_SERVICES)
+
+    def test_the_engine_and_the_workflow_agree(self):
+        """An engine reporting a stricter budget than the workflow enforces
+        sends anyone reading /health/ping to the wrong conclusion. These two
+        files are edited separately, so the agreement is asserted."""
+        import pathlib
+        import re
+
+        wf = pathlib.Path(__file__).resolve().parents[2] / ".github/workflows/keepalive.yml"
+        text = wf.read_text()
+
+        def env(key: str) -> int:
+            m = re.search(rf'^  {key}: "(\d+)"', text, re.M)
+            assert m, f"{key} not found in the workflow"
+            return int(m.group(1))
+
+        assert env("KEPT_WARM") == U.KEPT_WARM_SERVICES
+        assert env("WINDOW_START") == U.WINDOW_START_HOUR
+        assert env("WINDOW_END") == U.WINDOW_END_HOUR
+        # And the cron interval matches PING_INTERVAL_MINUTES.
+        cron = re.search(r'cron: "\*/(\d+) ', text)
+        assert cron and int(cron.group(1)) == U.PING_INTERVAL_MINUTES
 
     def test_three_free_services_share_the_pool(self):
         # engine, web, and the already-deployed v1.
@@ -52,15 +86,16 @@ class TestVerifiedFigures:
 
 
 class TestBudgetArithmetic:
-    def test_the_daily_window_is_about_seven_hours_per_service(self):
-        """750 x 0.85 / 3 / 30.44 = 6.98.
+    def test_the_daily_window_is_about_ten_hours_per_kept_warm_service(self):
+        """750 x 0.85 / 2 / 30.44 = 10.47.
 
-        NOT the 12 hours the playbook assumed -- that figure was written for two
-        services and there are three. The playbook's own instruction was that
-        the schedule adapts to the real numbers.
+        NOT the 12 hours the playbook assumed, and no longer the 6.98 of the
+        first cut either. Three services share the POOL, but only two are kept
+        WARM -- v1 is opt-in -- and it is the kept-warm count that divides
+        (DEC-067).
         """
         h = U.daily_window_hours()
-        assert 6.5 < h < 7.5, h
+        assert 10.0 < h < 11.0, h
 
     def test_two_services_would_get_more(self):
         assert U.daily_window_hours(services=2) > U.daily_window_hours(services=3)
@@ -133,11 +168,11 @@ class TestGuard:
     def test_STOPS_at_a_hundred_percent(self, monkeypatch):
         monkeypatch.setattr(U, "WINDOW_START_HOUR", 0)
         monkeypatch.setattr(U, "WINDOW_END_HOUR", 24)
-        # A month of pings ten minutes apart, well past one service's share.
+        # A month of pings at the real interval, well past one service's share.
         now = time.time()
-        share_seconds = (U.FREE_HOURS_PER_MONTH / 3) * 3600
+        share_seconds = (U.FREE_HOURS_PER_MONTH / U.KEPT_WARM_SERVICES) * 3600
         # Each ping credits the gap to the NEXT ping, capped at the spin-down
-        # window -- so at a 10-minute interval each credits 600 s, not 900.
+        # window -- so at a 5-minute interval each credits 300 s, not 900.
         n = int(share_seconds / (U.PING_INTERVAL_MINUTES * 60)) + 100
         pings = [now - (n - i) * U.PING_INTERVAL_MINUTES * 60 for i in range(n)]
         b = U.budget_state(now, {"pings": pings})
@@ -150,8 +185,8 @@ class TestGuard:
         monkeypatch.setattr(U, "WINDOW_START_HOUR", 0)
         monkeypatch.setattr(U, "WINDOW_END_HOUR", 24)
         now = time.time()
-        share_seconds = (U.FREE_HOURS_PER_MONTH / 3) * 3600
-        # Enough to cross 85% but not 100%. Each ping credits its 10-minute gap.
+        share_seconds = (U.FREE_HOURS_PER_MONTH / U.KEPT_WARM_SERVICES) * 3600
+        # Enough to cross 85% but not 100%. Each ping credits its own gap.
         target = share_seconds * 0.9
         n = int(target / (U.PING_INTERVAL_MINUTES * 60))
         pings = [now - (n - i) * U.PING_INTERVAL_MINUTES * 60 for i in range(n)]

@@ -1785,3 +1785,46 @@ Two smaller fixes in the same pass, both found by running it:
 - The script read `BASE_ENGINE`/`BASE_WEB` only, while `ENGINE_URL` is the name
   used everywhere else in the project. Passing `ENGINE_URL` warmed the *deployed*
   engine while appearing to warm localhost. Both names are accepted now.
+
+### DEC-073 · The engine and the workflow now agree on the schedule
+
+The first deployed `/health/diagnostics` read reported `share_hours: 250` and
+`next_window: 04:00` — the three-service, seven-hour figures — while the
+workflow that had just shipped was running two services from 03:00. Both files
+describe the same schedule and are edited separately, so they had drifted the
+moment one changed.
+
+`uptime.py` now carries `KEPT_WARM_SERVICES` (the divisor is the kept-*warm*
+count, not `len(FREE_SERVICES)` — v1 shares the pool but is not kept awake),
+`PING_INTERVAL_MINUTES = 5`, and the 03:00–13:00 window. A test parses
+`.github/workflows/keepalive.yml` and asserts all four values match. An engine
+reporting a stricter budget than the workflow enforces sends anyone reading
+`/health/ping` to the wrong conclusion.
+
+### DEC-074 · The deployed engine has no Postgres, and says so
+
+`/health/diagnostics` on the live engine:
+
+```
+"database": {"ok": false, "error": "connection to server at \"127.0.0.1\",
+             port 5432 failed: Connection refused"}
+```
+
+`DATABASE_URL` is unset in production, so the default falls back to localhost.
+The verdict is still `warm`, which is correct: the product's read paths run off
+the pickled caches and the JSON dataset, and every `/actors`, `/fusion` and
+`/graph` call returns 200. This is reported rather than hidden **and** rather
+than being escalated to `degraded`, because a diagnostic that cries failure over
+an optional dependency stops being read.
+
+### Verified in production, after the push
+
+```
+verdict : warm
+uptime  : 21.6 s
+caches  : signals warm, actors_index warm
+```
+
+Twenty-one seconds after a cold boot, with the actors index already built. The
+same engine before DEC-066 reported `actors_index: false` at fifteen seconds
+while calling itself healthy.
