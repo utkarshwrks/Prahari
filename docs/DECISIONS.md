@@ -1405,3 +1405,92 @@ looks like a bug.
 **Measured:** 51 engine geo tests (including five INV-1 spies and a
 cross-process determinism check), 30 client class tests, 19 geoderive tests with
 FINDING-06's three now passing as ordinary assertions.
+
+---
+
+## v2.1 Upgrade — Phase 6
+
+### DEC-063 — A footer on every page, and a status dot that never lies about a sleeping service.
+
+The footer links PRAHARI v1 at `https://prahari-6njh.onrender.com` — the
+Jabalpur geofence console this project grew out of — and states, on every page,
+what the system does and does not claim.
+
+#### The status dot is the reason the link is worth having
+
+v1 is a free Render instance and is asleep most of the time. A plain link sends
+a judge to a page that takes thirty seconds to appear and looks broken; a dot
+reading **"offline"** would be wrong twice over — the service is fine, and
+nobody who read that would click.
+
+So there are four states, and the last two are the point:
+
+| State | Meaning |
+|---|---|
+| `live` | answered inside the budget, with the latency |
+| `waking` | reachable but slow, or timed out — a cold start. Says **"waking — may take 30–60 s"** |
+| `unknown` | **the check itself failed.** We do not know, and we say so |
+| `checking` | in flight |
+
+**"unknown" is never rendered as "offline".** A failed check is a fact about our
+knowledge, not about the service, and INV-5 does not stop at the map. A DNS
+failure, a blocked request or an offline browser all produce `unknown`; only an
+actual timeout produces `waking`, because a timeout on a known free service *is*
+a cold start.
+
+The engine dot reads the proxy's own `engine: "offline"` field (DEC-017's
+degradation contract) and translates it to **waking** rather than passing it
+through — a cold engine on the free tier is the overwhelmingly likely cause, and
+that is knowledge, unlike a failed check.
+
+Every dot carries its state as **text** beside the colour, so a colour-blind
+reader and a screen reader get the same fact.
+
+#### Mounted once, at the root
+
+The footer is mounted in `app/layout.tsx`, so it is on every page **by
+construction** rather than by everyone remembering to add it. Three routes own
+the full viewport and render a one-line slim variant inside their own shell:
+`/workbench`, `/sangam`, `/command`. The root instance stands down for those,
+and the decision lives in the footer itself rather than in three shells,
+because the reason belongs with the component that knows it — a six-column
+footer under a 3D graph takes vertical space from the evidence to display a
+copyright notice.
+
+Two routes needed the slim variant added explicitly, found by walking every
+route in a browser rather than by assuming: **`/workbench/classic`**, which the
+workspace shell deliberately renders bare, and **`/command`**, which owns its
+own layout. Without those, the cockpit and the admin panel would have been the
+only two pages in the product with no footer at all.
+
+#### Build identity comes from the environment
+
+Version, commit SHA and environment are read at build time from
+`NEXT_PUBLIC_BUILD_*`, with `NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA` and
+`NEXT_PUBLIC_RENDER_GIT_COMMIT` as platform fallbacks so the footer is correct
+wherever it is deployed. Where a value is genuinely absent it renders **"build
+details not reported"** — never a placeholder. A version typed into a source
+file is wrong the moment someone forgets to bump it, and a footer confidently
+displaying the wrong commit tells a judge the deployment is something it is not.
+
+The environment is deliberately **not** keyed to `NODE_ENV`: `next start`
+reports "production" for a local run over plain HTTP — the same mismatch that
+broke the session cookie in DEC-059 — and a footer keyed to it would tell an
+analyst on localhost they were looking at production.
+
+#### `NEXT_PUBLIC_` widened, deliberately
+
+INV-2's test previously asserted that *only* feature flags carried the prefix.
+Build identity now does too, which is legitimate: a commit SHA is in the public
+repository and an environment name is visible from the URL, and both must render
+in a footer the browser draws. The allowlist is pinned so adding one is a
+reviewed act, and a second test rejects the *shape* of a mistake — any
+`NEXT_PUBLIC_` name matching `SECRET|KEY|TOKEN|PASSWORD|PEPPER|CREDENTIAL|PRIVATE`
+fails, even if someone updates the list without thinking.
+
+lucide icons only, skin tokens only, no hardcoded hex — so the footer reskins
+with the product and passes the Phase 1 semantic-token test. `role="contentinfo"`,
+and every external link announced as such.
+
+**Measured:** 33 footer unit tests, 16 e2e checks across eight routes, both dots
+resolving live against the real v1 deployment and the real engine.

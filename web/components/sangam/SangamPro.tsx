@@ -13,6 +13,7 @@ import {
 } from "@/lib/sangamClass";
 import Header from "../workbench/Header";
 import SangamProMap from "./SangamProMap";
+import Footer from "../system/Footer";
 
 /**
  * SANGAM PRO (DEC-061, DEC-062).
@@ -595,6 +596,8 @@ export default function SangamPro() {
           )}
         </aside>
       </div>
+
+      <Footer slim />
     </div>
   );
 }

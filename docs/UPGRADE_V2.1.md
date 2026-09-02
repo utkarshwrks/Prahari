@@ -469,5 +469,46 @@ git revert <phase-5-sha>
 
 ### Next
 
-**Phase 6 — footer and cross-version linking.** Small: a real footer on every page linking PRAHARI v1
-at `https://prahari-6njh.onrender.com`, with a status dot fed by Phase 7's keep-alive poll.
+**Phase 6 — footer and cross-version linking.**
+
+---
+
+## Phase 6 — Footer and cross-version linking
+
+**Status: COMPLETE. DEC-063.**
+
+| Check | Phase 5 | Phase 6 |
+|---|---|---|
+| `npm test` | 916 | **950 passed** |
+| `journey.mjs` | 123/123 | **137/137** |
+| `uv run pytest -q` | 452 | unchanged |
+| `npm run lint` / `build` | clean | clean |
+| `forge test` | not run | not run — same stated condition |
+
+**1,539 green.**
+
+### What changed
+
+1. **`components/system/Footer.tsx`** — full and slim variants, mounted once at the root so it is on
+   every page by construction.
+2. **`lib/serviceStatus.ts`** — four states, and **"unknown" is never rendered as "offline"**. A
+   failed check is a fact about our knowledge, not about the service.
+3. **`lib/buildInfo.ts`** — version, SHA and environment from build-time env, with Render and Vercel
+   fallbacks and "not reported" where genuinely absent. Deliberately not keyed to `NODE_ENV`.
+
+### Two missing footers, found by walking every route
+
+`/workbench/classic` and `/command` had none — the root instance stands down for those prefixes and
+neither shell rendered its own. Nothing in the unit suite could have caught it. Both fixed.
+
+### Rollback
+
+```bash
+git revert <phase-6-sha>
+```
+
+### Next
+
+**Phase 7 — always-on within the free tier.** The status dot this phase built is the surface Phase 7
+feeds. Its first instruction is explicit: **verify Render's real free-tier figures from the live docs
+and the account's usage page** before writing any schedule — do not trust remembered numbers.

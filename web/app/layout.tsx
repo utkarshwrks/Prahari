@@ -5,6 +5,7 @@ import {
 } from "./fonts";
 import { SKIN_PICKER_SCRIPT } from "@/lib/skins";
 import Providers from "./providers";
+import Footer from "@/components/system/Footer";
 
 export const metadata: Metadata = {
   title: "PRAHARI — Dark-Web Threat Actor Attribution",
@@ -38,8 +39,20 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* eslint-disable-next-line no-restricted-syntax -- documented INV-6 exception, see above */}
         <script dangerouslySetInnerHTML={{ __html: SKIN_PICKER_SCRIPT }} />
       </head>
-      <body className="min-h-screen antialiased">
-        <Providers>{children}</Providers>
+      <body className="flex min-h-screen flex-col antialiased">
+        {/*
+          The footer is mounted ONCE, at the root, so it is on every page by
+          construction rather than by twelve people remembering to add it.
+
+          Routes that own the full viewport -- the workspace and SANGAM -- render
+          their own slim variant inside their shell and suppress this one with
+          `data-full-viewport`, because a six-column footer under a graph steals
+          vertical space from the evidence to display a copyright notice.
+        */}
+        <Providers>
+          <div className="flex-1">{children}</div>
+          <Footer />
+        </Providers>
       </body>
     </html>
   );

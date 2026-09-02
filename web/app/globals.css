@@ -172,6 +172,8 @@ body::after {
 .hairline { border-bottom: 1px solid var(--border); }
 /* Vertical counterpart, for the workspace navigator rail (DEC-056). */
 .hairline-r { border-right: 1px solid var(--border); }
+/* Top counterpart, for the slim workspace footer (DEC-063). */
+.hairline-t { border-top: 1px solid var(--border); }
 
 .glass {
   background: color-mix(in srgb, var(--surface) 70%, transparent);

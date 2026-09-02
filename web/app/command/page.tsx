@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { FEATURES } from "@/lib/features";
 import CommandPanel from "@/components/command/CommandPanel";
+import Footer from "@/components/system/Footer";
 
 export const metadata = { title: "Command panel — PRAHARI" };
 
@@ -35,8 +36,13 @@ export default function Page() {
     );
   }
   return (
-    <main className="slim mx-auto max-h-screen max-w-[1280px] overflow-y-auto p-3">
-      <CommandPanel />
-    </main>
+    <div className="flex h-screen flex-col overflow-hidden">
+      <main className="slim mx-auto w-full max-w-[1280px] flex-1 overflow-y-auto p-3">
+        <CommandPanel />
+      </main>
+      {/* The root footer stands down for /command, so this route mounts its
+          own -- the gate is a footer on EVERY page (DEC-063). */}
+      <Footer slim />
+    </div>
   );
 }

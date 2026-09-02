@@ -383,6 +383,88 @@ const run = async () => {
   log("focus returns to the control that opened the palette", restored.ok, String(restored.why));
   }
 
+  // ------------------------------------------------- the footer (DEC-063)
+  console.log("\n== FOOTER AND v1 LINKING (DEC-063) ==");
+
+  const FOOTER_ROUTES = [
+    ["/", "full"], ["/about", "full"], ["/docs", "full"],
+    ["/workbench", "slim"], ["/workbench/actors", "slim"],
+    ["/workbench/classic", "slim"], ["/sangam", "slim"], ["/command", "slim"],
+  ];
+
+  const missing = [];
+  const wrongVariant = [];
+  for (const [route, expected] of FOOTER_ROUTES) {
+    await page.goto(`${BASE}${route}`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(route === "/sangam" || route.endsWith("classic") ? 9000 : 4000);
+    const variant = await page.evaluate(
+      () => document.querySelector("[data-testid=footer]")?.getAttribute("data-variant") ?? null
+    );
+    if (!variant) missing.push(route);
+    else if (variant !== expected) wrongVariant.push(`${route}: ${variant}`);
+  }
+  log("the footer is on EVERY route", missing.length === 0, missing.join(", "));
+  log("full-viewport routes get the slim variant, others the full one",
+      wrongVariant.length === 0, wrongVariant.join(" | "));
+
+  // The v1 link, and its protection.
+  await page.goto(`${BASE}/about`, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(9000);
+  const v1 = await page.evaluate(() => {
+    const a = document.querySelector('a[href*="prahari-6njh.onrender.com"]');
+    if (!a) return null;
+    return {
+      href: a.getAttribute("href"),
+      rel: a.getAttribute("rel"),
+      target: a.getAttribute("target"),
+      announced: (a.textContent ?? "").includes("opens in a new tab"),
+    };
+  });
+  log("PRAHARI v1 is linked", Boolean(v1), v1?.href ?? "not found");
+  log("the v1 link carries rel=noopener noreferrer and target=_blank",
+      v1?.rel === "noopener noreferrer" && v1?.target === "_blank");
+  log("the external link is announced to a screen reader", v1?.announced === true);
+  log("the v1 link is described as the Jabalpur geofence console",
+      await page.evaluate(() => /Jabalpur geofence console/.test(document.body.innerText)));
+
+  // The status dots, and the state that must never appear.
+  const dots = await page.evaluate(() =>
+    [...document.querySelectorAll("[data-testid=status-dot]")].map((d) => ({
+      state: d.getAttribute("data-state"),
+      label: (d.textContent ?? "").trim(),
+    }))
+  );
+  log("both status dots resolved to a real state", dots.length >= 2 &&
+      dots.every((d) => ["live", "waking", "unknown"].includes(d.state ?? "")),
+      dots.map((d) => `${d.state}`).join(", "));
+  log("no dot ever reads 'offline'",
+      dots.every((d) => !/offline/i.test(d.label)),
+      dots.map((d) => d.label).join(" | "));
+  log("the status is carried as TEXT, not colour alone",
+      dots.every((d) => d.label.length > 2));
+
+  // Build identity from the environment, never hardcoded.
+  const build = await page.evaluate(
+    () => document.querySelector("[data-testid=build-line]")?.textContent?.trim() ?? ""
+  );
+  log("the footer states the build it is actually running", build.length > 0, build);
+
+  // The four statements and the honesty line, on every page.
+  const footerText = await page.evaluate(
+    () => document.querySelector("[data-testid=footer]")?.textContent ?? ""
+  );
+  log("the four 'we never' statements are present",
+      ["never touch Tor", "never scrape a live market", "never put PII on chain",
+       "never claim certainty"].every((n) => footerText.includes(n)));
+  log("the standing honesty line is present",
+      /does not break Tor/.test(footerText) && /claim certainty/.test(footerText));
+  log("the competition, problem statement and team are named",
+      /SIH 2026 · PS 26151 · NTRO · Team Vasiliades/.test(footerText));
+
+  // Accessibility.
+  log("the footer is a contentinfo landmark",
+      (await page.locator('footer[role="contentinfo"]').count()) > 0);
+
   // ------------------------------------------------- SANGAM Pro (DEC-061/062)
   console.log("\n== SANGAM PRO (DEC-061, DEC-062) ==");
 

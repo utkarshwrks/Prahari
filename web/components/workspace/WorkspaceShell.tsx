@@ -14,6 +14,7 @@ import { api, type EvalMetrics, type SourcesResult } from "@/lib/api";
 import { useState } from "react";
 import CommandPalette from "./CommandPalette";
 import Breadcrumbs from "./Breadcrumbs";
+import Footer from "../system/Footer";
 
 /**
  * The workspace shell (DEC-056).
@@ -98,10 +99,25 @@ export default function WorkspaceShell({ children }: { children: React.ReactNode
   const band = bandOf(confidence);
   const live = src?.scheduler?.running;
 
-  // The classic cockpit renders its own Header and owns the full viewport.
-  // Wrapping it would give it two headers and a nested scroll container, and
-  // would invalidate the Phase 0 visual baseline, which is a picture of it.
-  if (pathname === "/workbench/classic") return <>{children}</>;
+  /**
+   * The classic cockpit renders its own Header and owns the full viewport, so
+   * it is NOT wrapped in the workspace chrome -- that would give it two headers
+   * and a nested scroll container.
+   *
+   * It does still get the slim footer (DEC-063). The gate is "a footer on every
+   * page", and the root instance stands down for anything under /workbench, so
+   * without this line the cockpit would be the one page in the product with no
+   * footer at all. One line under an h-screen cockpit is the smallest change
+   * that satisfies it.
+   */
+  if (pathname === "/workbench/classic") {
+    return (
+      <div className="flex h-screen flex-col overflow-hidden">
+        <div className="min-h-0 flex-1">{children}</div>
+        <Footer slim />
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
@@ -259,6 +275,9 @@ export default function WorkspaceShell({ children }: { children: React.ReactNode
           {children}
         </main>
       </div>
+
+      {/* One line, so the cockpit keeps its vertical space (DEC-063). */}
+      <Footer slim />
 
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </div>

@@ -1295,3 +1295,73 @@ and command flags.
 distinct by shape, every point clickable with a timestamped chain, no fabricated
 coordinate anywhere (FINDING-06 closed), and `.onion` never resolved (FINDING-09
 closed, with spies). **DEC-061, DEC-062.**
+
+---
+
+## v2.1 Phase 6 — footer and cross-version linking
+
+| Check | Phase 5 | Phase 6 | Result |
+|---|---|---|---|
+| `npm test` | 916 passed | **950 passed** (25 files) | **PASS** |
+| `npm run lint` | clean | clean | **PASS** |
+| `npm run build` | clean | clean | **PASS** |
+| `uv run pytest -q` | 452 passed | 452 passed / 17 skipped | **PASS** |
+| `journey.mjs` | 123/123 | **137/137** (14 new footer checks) | **PASS** |
+| `forge test` | not run | not run | **CONDITION** |
+
+**Total: 1,539 green** (950 web · 452 engine · 137 e2e).
+
+### New e2e coverage — 14 checks across eight routes
+
+```
+PASS  the footer is on EVERY route
+PASS  full-viewport routes get the slim variant, others the full one
+PASS  PRAHARI v1 is linked — https://prahari-6njh.onrender.com
+PASS  the v1 link carries rel=noopener noreferrer and target=_blank
+PASS  the external link is announced to a screen reader
+PASS  the v1 link is described as the Jabalpur geofence console
+PASS  both status dots resolved to a real state — live, live
+PASS  no dot ever reads 'offline' — Live · 584 ms | Live · 8 ms
+PASS  the status is carried as TEXT, not colour alone
+PASS  the footer states the build it is actually running — v2.1.0 · build 5ad2665 · development
+PASS  the four 'we never' statements are present
+PASS  the standing honesty line is present
+PASS  the competition, problem statement and team are named
+PASS  the footer is a contentinfo landmark
+```
+
+The v1 dot resolved **live at 584 ms** against the real deployment, and the
+engine dot at 8 ms — both measured, neither hardcoded.
+
+### Two missing footers, found by walking every route
+
+The first pass mounted the footer at the root and a slim variant in the
+workspace and SANGAM shells. Walking all eight routes in a browser showed
+**`/workbench/classic` and `/command` had none**: the root instance stands down
+for anything under those prefixes, and neither route's shell rendered its own.
+The cockpit and the admin panel would have been the only two pages in the
+product with no footer at all — which is exactly what "footer on every page"
+rules out. Both now mount the slim variant explicitly.
+
+Nothing in the unit suite could have caught it: the tests assert the component
+is correct and that it is mounted at the root, and both were true.
+
+### `npm test` 916 → 950
+
+| File | Tests | Covers |
+|---|---|---|
+| `footer.test.ts` | 33 | The v1 link's `rel`/`target`/description/announcement; the four status states with **no `offline` in the `ServiceState` union or any label**; probe classification (fast → live, non-2xx → live because something answered, timeout → waking, anything else → unknown); build identity from the environment with "not reported" as the fallback; `NODE_ENV` deliberately unused; INV-7 and skin tokens; both mount points |
+| `security.test.ts` | +1 | The `NEXT_PUBLIC_` allowlist widened deliberately for `BUILD_*`, **plus a new shape check** rejecting any such name matching `SECRET\|KEY\|TOKEN\|PASSWORD\|PEPPER\|CREDENTIAL\|PRIVATE` — so the list cannot be updated carelessly |
+
+### A note on the Phase 0 baseline
+
+`/workbench/classic` now carries a one-line slim footer, so it differs from
+`web/e2e/__baseline__/workbench.png` by that line. Deliberate, and recorded here
+rather than left for someone to find in a visual diff: the gate is a footer on
+every page, and the cockpit is a page.
+
+### Verdict
+
+**PHASE 6 GATE: GREEN.** Footer on every page, v1 linked with correct `rel` and
+a status dot that reads "waking" for a sleeping service and "unknown" for a
+failed check — never "offline". **DEC-063.**

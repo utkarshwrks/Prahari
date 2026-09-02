@@ -205,20 +205,55 @@ describe("INV-2 - the browser never holds the engine URL or a key", () => {
     expect(leaks.map(rel)).toEqual([]);
   });
 
-  it("only feature flags carry the NEXT_PUBLIC_ prefix", () => {
+  it("every NEXT_PUBLIC_ variable is one we deliberately made public", () => {
     const names = new Set<string>();
     for (const f of SOURCES) {
       for (const m of read(f).matchAll(/process\.env\.(NEXT_PUBLIC_[A-Z0-9_]+)/g)) {
         names.add(m[1]);
       }
     }
-    // A flag name is not a secret. Anything else appearing here is a leak.
+    /**
+     * A pinned list, so adding one is a deliberate, reviewed act.
+     *
+     * Two kinds are permitted and nothing else:
+     *
+     *   FF_*     feature flags. A flag NAME is not a secret, and the flag has
+     *            to be readable in the client bundle to decide which tree
+     *            renders.
+     *   BUILD_*  build identity (DEC-063). A commit SHA is in the public
+     *            repository and the environment name is visible from the URL;
+     *            both must render in a footer the browser draws.
+     *
+     * Anything else appearing here is a leak, and this test is what makes that
+     * visible rather than silent.
+     */
     expect([...names].sort()).toEqual([
+      "NEXT_PUBLIC_BUILD_ENV",
+      "NEXT_PUBLIC_BUILD_SHA",
+      "NEXT_PUBLIC_BUILD_VERSION",
       "NEXT_PUBLIC_FF_COMMAND",
       "NEXT_PUBLIC_FF_GRAPH_LAB",
       "NEXT_PUBLIC_FF_SANGAM_PRO",
       "NEXT_PUBLIC_FF_WORKSPACE",
+      "NEXT_PUBLIC_RENDER_GIT_COMMIT",
+      "NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA",
     ]);
+  });
+
+  it("no NEXT_PUBLIC_ variable names a secret", () => {
+    // The pinned list above catches additions; this catches the SHAPE of a
+    // mistake, so a variable called NEXT_PUBLIC_API_KEY fails loudly even if
+    // someone updates the list without thinking.
+    const names = new Set<string>();
+    for (const f of SOURCES) {
+      for (const m of read(f).matchAll(/process\.env\.(NEXT_PUBLIC_[A-Z0-9_]+)/g)) {
+        names.add(m[1]);
+      }
+    }
+    const suspicious = [...names].filter((n) =>
+      /SECRET|KEY|TOKEN|PASSWORD|PEPPER|CREDENTIAL|PRIVATE/.test(n)
+    );
+    expect(suspicious).toEqual([]);
   });
 
   it("the proxy is an allowlist, not a passthrough", () => {
