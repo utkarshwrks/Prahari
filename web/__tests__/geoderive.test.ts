@@ -7,10 +7,13 @@
  * derived point is labelled `inferred: true` so it can never be read as a
  * measurement.
  *
- * Phase 5 replaces `inferred: boolean` with a three-class model
- * (RESOLVED / DERIVED / UNAVAILABLE) and its own marker shapes. These tests pin
- * the honesty property that must survive that change, and the determinism
- * property Phase 5's gate re-asserts across processes.
+ * Phase 5 added the engine-side three-class model (RESOLVED / DERIVED /
+ * UNAVAILABLE) in `engine/geo/classify.py`, with its own marker shapes and its
+ * own tests. This module keeps its `inferred` flag because the map still reads
+ * it and the prime directive says not to break a working caller -- so these
+ * tests pin the honesty and determinism properties on THIS side of the line.
+ *
+ * FINDING-06 was found here in Phase 0b and fixed here in DEC-061.
  */
 import { describe, it, expect } from "vitest";
 import { nodesForActor, centroid, haversineKm, type GeoNode } from "@/lib/geoderive";
@@ -101,60 +104,54 @@ describe("nodesForActor - determinism", () => {
   });
 
   /**
-   * FINDING-06 (found by this suite, Phase 0b) -- an INV-5 violation, live.
+   * FINDING-06, FIXED in DEC-061.
    *
-   * `nodesForActor` emits a Binance off-ramp marker for EVERY actor, including
-   * one with no infrastructure, no markets and no personas:
+   * `nodesForActor` used to emit a Binance off-ramp for EVERY actor, including
+   * one with no infrastructure, markets or personas -- `Math.max(1, length)`
+   * guaranteed the first iteration always ran. It was stamped
+   * `inferred: false` and captioned "Wallet-cluster cash-out reaches Binance.
+   * Known exchange region.": a positive claim about an actor's cash-out route,
+   * derived from nothing, drawn with the styling of a measurement.
    *
-   *     offramps.forEach((ex, i) => {
-   *       if (i >= Math.max(1, p.infrastructure.length)) return;   // <- max(1, 0) === 1
-   *
-   * `Math.max(1, ...)` guarantees the first iteration always runs. The marker
-   * is then stamped `inferred: false` and captioned "Wallet-cluster cash-out
-   * reaches Binance. Known exchange region." -- a positive, unhedged claim
-   * about an actor's cash-out route, derived from nothing, rendered on the map
-   * with the same styling as a measured fact.
-   *
-   * The source comment says "(illustrative)". The payload says `inferred:
-   * false`. INV-5 is explicit that where a fact is derived or synthetic it is
-   * labelled as such in the payload AND on screen.
-   *
-   * Marked `.fails` rather than asserting the buggy output: pinning the defect
-   * would cement it, and skipping it would hide it. As written, the suite stays
-   * green today and this test STARTS FAILING the moment someone fixes it --
-   * which is the prompt to delete the `.fails` and keep the guarantee.
-   *
-   * Phase 5 owns the fix: off-ramp geography becomes "always DERIVED, always
-   * labelled" under the three-class model. Phase 0b does not touch product code.
+   * These were `it.fails` from Phase 0b through Phase 4, so the suite stayed
+   * green while the defect stayed visible. They are now ordinary assertions --
+   * which is what "the tests flip the moment someone fixes it" was for.
    */
-  it.fails("FINDING-06: places nothing for an actor with nothing to place", () => {
+  it("FINDING-06: places nothing for an actor with nothing to place", () => {
     expect(
       nodesForActor({ ...profile, markets: [], infrastructure: [], personas: [] })
     ).toEqual([]);
   });
 
-  it.fails("FINDING-06: does not claim a cash-out route as a measured fact", () => {
+  it("FINDING-06: emits no off-ramp without evidence naming one", () => {
     const offramps = nodesForActor({
       ...profile,
       markets: [],
       infrastructure: [],
       personas: [],
     }).filter((n) => n.kind === "offramp");
-    // Either it should not be there at all, or it must be labelled inferred.
-    expect(offramps.every((n) => n.inferred)).toBe(true);
+    expect(offramps).toEqual([]);
   });
 
-  it("documents the current behaviour so the defect is measurable", () => {
-    // What ships today, stated plainly. Not an endorsement -- a measurement.
+  it("FINDING-06: an off-ramp that IS emitted is labelled inferred", () => {
+    // Evidence naming an exchange is what earns a marker...
     const nodes = nodesForActor({
       ...profile,
-      markets: [],
+      markets: ["Binance"],
       infrastructure: [],
-      personas: [],
+      personas: [{ handle: "x", market: "Binance" }],
     });
-    expect(nodes).toHaveLength(1);
-    expect(nodes[0].id).toBe("offramp:Binance");
-    expect(nodes[0].inferred).toBe(false);
+    const offramps = nodes.filter((n) => n.kind === "offramp");
+    expect(offramps).toHaveLength(1);
+    // ...and even then it is derived, not measured.
+    expect(offramps[0].inferred).toBe(true);
+    expect(offramps[0].detail).toContain("not a measured location");
+    expect(offramps[0].detail).toContain("not where any transaction occurred");
+  });
+
+  it("FINDING-06: no longer claims a cash-out route as a measured fact", () => {
+    const measured = nodesForActor(profile).filter((n) => !n.inferred && n.kind === "offramp");
+    expect(measured).toEqual([]);
   });
 });
 

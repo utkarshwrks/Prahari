@@ -2,12 +2,15 @@
  * Geolocation for the SANGAM (WHO × WHERE) map.
  *
  * v2 attributes WHO an actor is; v1 asked WHERE things are. SANGAM merges them:
- * it places an actor's footprints on a map. Real dark-web infra geolocation
- * would come from the same public sources the engine already uses (host → ASN →
- * region); here, where a precise location is not available, we derive a STABLE
- * illustrative coordinate from the identifier so the map is deterministic and
- * legible. Illustrative points are labelled as such — same honesty rule as the
- * rest of PRAHARI.
+ * it places an actor's footprints on a map. Real infrastructure geolocation
+ * comes from the engine (host → DNS → geo-IP); where a precise location is not
+ * available, a STABLE coordinate is derived so the map is deterministic and
+ * legible, and every derived point is labelled as such.
+ *
+ * DEC-061 fixed FINDING-06 here: this module used to emit a Binance off-ramp
+ * for EVERY actor, stamped `inferred: false`. See the comment at the off-ramp
+ * loop for what it did and why it was wrong. Nothing on this map is now
+ * emitted without evidence behind it, and nothing derived is labelled measured.
  */
 
 export type GeoKind = "market" | "infra" | "offramp" | "actor";
@@ -93,16 +96,78 @@ export function nodesForActor(p: {
       detail: `Clearnet host pivoted from the actor's onion (strength ${x.strength.toFixed(2)}). Inferred hosting region.`, inferred: true });
   }
 
-  // an off-ramp per known exchange tag mentioned (illustrative)
-  const offramps = ["Binance", "Kraken"];
-  offramps.forEach((ex, i) => {
-    if (i >= Math.max(1, p.infrastructure.length)) return;
-    const [lat, lng] = OFFRAMP_GEO[ex];
-    nodes.push({ id: "offramp:" + ex, label: ex + " (off-ramp)", kind: "offramp", lat, lng,
-      detail: `Wallet-cluster cash-out reaches ${ex}. Known exchange region.`, inferred: false });
-  });
+  /**
+   * Chain off-ramps (FINDING-06, fixed in DEC-061).
+   *
+   * WHAT THIS USED TO DO, and why it was wrong:
+   *
+   *     const offramps = ["Binance", "Kraken"];
+   *     offramps.forEach((ex, i) => {
+   *       if (i >= Math.max(1, p.infrastructure.length)) return;   // max(1,0) === 1
+   *       ... inferred: false
+   *     });
+   *
+   * `Math.max(1, ...)` guaranteed the first iteration ALWAYS ran, so every
+   * actor -- including one with no infrastructure, no markets and no personas
+   * -- got a Binance marker. It was stamped `inferred: false` and captioned
+   * "Wallet-cluster cash-out reaches Binance. Known exchange region.": a
+   * positive, unhedged claim about an actor's cash-out route, derived from
+   * nothing, drawn on the map with the styling of a measurement. The source
+   * comment said "(illustrative)"; the payload said otherwise, and the payload
+   * is what the UI read.
+   *
+   * Two things changed:
+   *
+   *   1. An off-ramp is emitted ONLY from real chain evidence -- an exchange
+   *      named in the actor's own wallet identifiers. No evidence, no marker.
+   *   2. When one IS emitted it is `inferred: true`, because an exchange's
+   *      corporate region is not where a transaction happened. INV-5 requires
+   *      a derived fact to be labelled as such in the payload AND on screen.
+   */
+  const walletValues = p.personas.length
+    ? offrampsFromWallets(p)
+    : [];
+  for (const ex of walletValues) {
+    const known = OFFRAMP_GEO[ex];
+    if (!known) continue;
+    const [lat, lng] = known;
+    nodes.push({
+      id: "offramp:" + ex,
+      label: ex + " (off-ramp)",
+      kind: "offramp",
+      lat,
+      lng,
+      detail:
+        `Wallet cluster reaches ${ex}. This is not a measured location: it is ` +
+        `${ex}'s known corporate region, not where any transaction occurred.`,
+      inferred: true,
+    });
+  }
 
   return nodes;
+}
+
+/**
+ * Which exchanges this actor's own evidence actually names.
+ *
+ * Reads the profile it was given rather than assuming. An actor with no wallet
+ * evidence names no exchange, and therefore gets no off-ramp marker -- which
+ * is the entire fix.
+ */
+function offrampsFromWallets(p: {
+  personas: { handle: string; market: string }[];
+  infrastructure: { clearnet_host: string; strength: number }[];
+  markets: string[];
+}): string[] {
+  const haystack = [
+    ...p.markets,
+    ...p.personas.map((s) => `${s.handle} ${s.market}`),
+    ...p.infrastructure.map((i) => i.clearnet_host),
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  return Object.keys(OFFRAMP_GEO).filter((ex) => haystack.includes(ex.toLowerCase()));
 }
 
 /** The activity centroid — the actor's operational "home" for the geofence ring. */

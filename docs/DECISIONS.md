@@ -1278,3 +1278,130 @@ returning zeroes, because a zero is a measurement (INV-5).
 **Measured:** 885 web unit tests (including a 351-assertion authZ matrix and 50
 TOTP tests), 401 engine tests, and the full refuse → enrol → verify → replay →
 write → soft-delete → chain flow exercised in a real browser.
+
+---
+
+## v2.1 Upgrade — Phase 5
+
+### DEC-061 — Three coordinate classes, distinguished by shape, and one of them is a refusal.
+
+Every point on the SANGAM map is exactly one of:
+
+| Class | Meaning | Marker |
+|---|---|---|
+| **RESOLVED** | host → DNS A/AAAA → geo-IP returned a real location | solid filled pin |
+| **DERIVED** | no resolution; a stable coordinate standing for a known hosting or exchange region. **Not a measured location** | hollow pin, **dashed** ring, no pulse |
+| **UNAVAILABLE** | nothing to place | **not plotted**; listed with the reason |
+
+**Shape, not colour.** Colour is skin-dependent after DEC-055 and fails for
+colour-blind readers, so the distinction survives greyscale. The legend uses the
+same grammar as the markers.
+
+#### FINDING-09 — a live INV-1 violation, found and fixed here
+
+`routers/geo.py::_resolve` called `socket.gethostbyname()` on **any** host it
+was given, including a `.onion`. The lookup failed, so the response looked
+correct — but **the query was issued**, and INV-1 is about what the process
+does, not about what it returns. The existing spy test in `test_infra.py`
+patched `socket.getaddrinfo`, a different function, and never covered the geo
+router at all.
+
+Proven with a spy before fixing:
+
+```
+gethostbyname called with: ['secretmarketxyz.onion']
+INV-1 VIOLATED
+```
+
+The check is now **first** — before the cache and before any socket call. Put
+anywhere later, a cached or racing path could still issue the lookup. The
+refusal is a *feature*, so it says so: `onion — resolution refused by design`,
+with a chain step reading *"PRAHARI never resolves or contacts a .onion host
+(INV-1). No DNS query was issued."* Five spy tests now cover both the new
+resolver and the original code path, which is still exported and still reachable.
+
+#### FINDING-06 — fixed, and its tests flipped
+
+`lib/geoderive.ts` emitted a Binance off-ramp for **every** actor —
+`Math.max(1, p.infrastructure.length)` guaranteed the first iteration always ran
+— stamped `inferred: false` and captioned *"Wallet-cluster cash-out reaches
+Binance. Known exchange region."* A fabricated cash-out claim drawn with the
+styling of a measurement. Found in Phase 0b by a suite that was one hour old,
+pinned as `it.fails` through Phases 1–4 so the defect stayed visible while the
+suite stayed green, and fixed here.
+
+Two changes: an off-ramp is emitted **only** from evidence the actor's own
+profile names, and when one is emitted it is `inferred: true` with the sentence
+*"not where any transaction occurred"* — an exchange's corporate region is not
+where a transaction happened. The three `it.fails` cases are now ordinary
+assertions, which is exactly what "the tests flip the moment someone fixes it"
+was for.
+
+#### The hard rules, each with a test
+
+- **A DERIVED coordinate is rounded to one decimal place** (~11 km). Six
+  decimals would imply metre precision the rule does not have, and a
+  street-level zoom on a region is a lie about the data.
+- **A DERIVED point has no city, ASN, IP or provider.** A region is not a city
+  and has no ASN; populating either would be a placeholder dressed as a
+  measurement.
+- **No random jitter, ever.** Two hosts that genuinely share a location get two
+  *identical* coordinates and are clustered with a count badge. Scattering them
+  to look prettier is fabrication. The classifier's AST is scanned for `random`,
+  `shuffle` and `uuid` — scanning the text would have matched the module's own
+  prose about not using them.
+- **Determinism across processes**, not just across calls: two subprocesses are
+  spawned and their output compared, because two analysts comparing screenshots
+  must see the same map.
+- **A host matching no rule gets no point at all.** Not a hashed coordinate —
+  that was FINDING-06's shape.
+
+#### Freshness and re-resolution
+
+Every point carries `resolved_at`; anything past the 24-hour window renders
+muted with an age chip, because a stale location presented as current is a false
+statement. "Re-resolve now" shows the new answer **beside** the old one rather
+than replacing it — an analyst checking whether infrastructure moved needs both.
+
+---
+
+### DEC-062 — The engine extends `/geo`, and the class survives leaving the tool.
+
+`/geo/host` and `/geo/hosts` keep their shape and their 32-host cap; every field
+they returned before is still returned, and a caller reading `resolved` and
+`lat`/`lng` keeps working. What is added sits beside them: `class`, a timestamped
+`resolution_chain`, `asn`, `reverse_dns`, `resolver_used`, `resolved_at` and
+`cache_age_s`, plus `/geo/asn`, `/geo/actor/{id}/footprint`,
+`/geo/certificate-links` and `/geo/sources`.
+
+**The footprint draws on three real sources**, and invents nothing to fill the
+map out: clearnet hosts (the engine classifies each), `.onion` identifiers
+(UNAVAILABLE by construction), and market names (DERIVED, **only** where a rule
+exists).
+
+**`ttl` is null.** The stdlib resolver does not expose it, and reporting 300
+because it is a common default would be exactly the plausible guess INV-5
+forbids. A test asserts the field stays null and that the reason is written down.
+
+**A disk cache with a stated TTL** (six hours), so a 512 MB free instance never
+re-resolves in a loop and a demo does not hammer `ipwho.is` into rate-limiting
+mid-presentation. The **cache age is shown in the UI**, never hidden.
+
+**Exports keep the class.** GeoJSON and CSV both carry it, and an UNAVAILABLE
+point is exported as a feature with **null geometry** rather than dropped — a
+file that silently omits them tells the recipient there were four hosts when
+there were seven, and the ones it lost are the `.onion` refusals, which are the
+most interesting rows in the file. Round-trip tests parse both back and compare.
+
+**Comparison refuses to read precision that is not there.** Selecting two points
+gives distance and shared facts only when both are RESOLVED; if either is
+DERIVED the comparison is refused with a written reason naming which point and
+why. It is never refused silently.
+
+**Tile failure is stated.** If the tile provider is unreachable, a banner says so
+and the points draw over a plain graticule — not a blank grey rectangle that
+looks like a bug.
+
+**Measured:** 51 engine geo tests (including five INV-1 spies and a
+cross-process determinism check), 30 client class tests, 19 geoderive tests with
+FINDING-06's three now passing as ordinary assertions.

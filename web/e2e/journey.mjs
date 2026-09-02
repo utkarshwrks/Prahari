@@ -165,9 +165,27 @@ const run = async () => {
   await page.goto(`${BASE}/sangam`, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(9000);
   const sangam = await page.evaluate(() => document.body.innerText);
+  const sangamPro = await page.evaluate(
+    () => document.querySelector("[data-testid=class-legend]") !== null
+  );
   log("sangam route renders", /WHO × WHERE|संगम/.test(sangam));
-  log("sangam lists actors to place", /0\.9\d/.test(sangam));
-  log("sangam links back to the workbench", /WORKBENCH/i.test(sangam));
+
+  /**
+   * Which SANGAM is this?
+   *
+   * Detected, not assumed -- the same lesson as the workspace flag in Phase 2.
+   * SANGAM Pro replaces the actor confidence list and the WORKBENCH link with a
+   * class legend and an actor selector, so asserting the old surface against
+   * the new one would fail for a correct build.
+   */
+  if (sangamPro) {
+    log("sangam offers actors to place",
+        (await page.locator('select[aria-label="Actor"] option').count()) > 1);
+    log("sangam states the coordinate classes", /coordinate class/i.test(sangam));
+  } else {
+    log("sangam lists actors to place", /0\.9\d/.test(sangam));
+    log("sangam links back to the workbench", /WORKBENCH/i.test(sangam));
+  }
 
   // ------------------------------------------------------------ accessibility
   console.log("\n== ACCESSIBILITY ==");
@@ -363,6 +381,122 @@ const run = async () => {
     return { ok: trapped && document.activeElement === opener, why: document.activeElement?.tagName };
   });
   log("focus returns to the control that opened the palette", restored.ok, String(restored.why));
+  }
+
+  // ------------------------------------------------- SANGAM Pro (DEC-061/062)
+  console.log("\n== SANGAM PRO (DEC-061, DEC-062) ==");
+
+  await page.goto(`${BASE}/sangam`, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(6000);
+  const proOn = await page.evaluate(
+    () => document.querySelector("[data-testid=class-legend]") !== null
+  );
+
+  if (!proOn) {
+    log("flag off: the original SANGAM map still renders",
+        await page.evaluate(() => /WHO × WHERE|संगम/.test(document.body.innerText)));
+    console.log("  SKIP  three-class model — sangam flag off");
+  } else {
+    // The legend names all three classes, with their meanings.
+    const legend = await page.evaluate(() => ({
+      rows: document.querySelectorAll("[data-testid=class-legend] li").length,
+      text: document.querySelector("[data-testid=class-legend]")?.textContent ?? "",
+    }));
+    log("the legend names all three coordinate classes", legend.rows === 3, `${legend.rows} rows`);
+    log("the legend carries the 'not a measured location' sentence",
+        /not a measured location/i.test(legend.text));
+    log("the legend says an unavailable point is not plotted",
+        /not\s+plotted/i.test(legend.text));
+
+    // An actor with a genuinely resolvable host, so all three classes appear.
+    await page.selectOption('select[aria-label="Actor"]', "actor-009").catch(() => {});
+    await page.waitForTimeout(9000);
+
+    const classes = await page.evaluate(() => [
+      ...new Set(
+        [...document.querySelectorAll("[data-class]")].map((e) => e.getAttribute("data-class"))
+      ),
+    ]);
+    log("all three classes are represented on screen",
+        ["resolved", "derived", "unavailable"].every((c) => classes.includes(c)),
+        classes.join(", "));
+
+    // INV-1, demonstrated on real input rather than asserted.
+    await page.fill('input[aria-label="Locate a host"]', "secretmarket.onion");
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(4500);
+    const note = await page.evaluate(
+      () => document.querySelector("[data-testid=lookup-note]")?.textContent ?? ""
+    );
+    log("a .onion lookup is REFUSED BY DESIGN, not merely unresolved",
+        /refused by design/i.test(note), note.trim().slice(0, 70));
+
+    const unplacedText = await page.evaluate(
+      () => document.querySelector("[data-testid=unplaced-list]")?.textContent ?? ""
+    );
+    log("the refused onion appears in the unplaced panel with its reason",
+        /secretmarket\.onion/.test(unplacedText) && /refused by design/i.test(unplacedText));
+
+    // Click a resolved marker -> the full chain.
+    await page.evaluate(() =>
+      document.querySelector("[data-testid=marker-list] button")?.click()
+    );
+    await page.waitForTimeout(3000);
+    const detail = await page.evaluate(() => ({
+      steps: [...document.querySelectorAll("[data-testid=resolution-chain] li")].map((e) =>
+        (e.textContent ?? "").trim()
+      ),
+      text: document.body.innerText,
+    }));
+    log("clicking a resolved marker shows its resolution chain",
+        detail.steps.length >= 3, `${detail.steps.length} steps`);
+    log("the chain runs host -> DNS -> geo-IP -> coordinate",
+        /host/i.test(detail.steps.join(" ")) &&
+        /dns/i.test(detail.steps.join(" ")) &&
+        /geoip/i.test(detail.steps.join(" ")));
+    log("every chain step carries a timestamp",
+        detail.steps.every((s) => /\d{2}:\d{2}:\d{2}/.test(s)));
+    log("a field with no value reads 'not available', never blank",
+        /not available/i.test(detail.text));
+    log("the cache age is shown rather than hidden", /Cache age/i.test(detail.text));
+
+    // A derived marker states it is not a measurement.
+    const derivedShown = await page.evaluate(() => {
+      const btns = [...document.querySelectorAll("[data-testid=marker-list] button")];
+      const d = btns.find((b) => /derived/i.test(b.textContent ?? ""));
+      if (!d) return null;
+      d.click();
+      return true;
+    });
+    if (derivedShown) {
+      await page.waitForTimeout(2500);
+      const dText = await page.evaluate(() => document.body.innerText);
+      log("clicking a derived marker says it is NOT a measured location",
+          /not a measured location/i.test(dText));
+      log("a derived point has no city or ASN to show",
+          /not available/i.test(dText));
+    } else {
+      console.log("  SKIP  derived marker detail — none in this actor's footprint");
+    }
+
+    // The engine's own refusal, through the proxy.
+    const geo = await page.evaluate(async () => {
+      const r = await fetch("/api/engine/geo/host?host=abc.onion", { cache: "no-store" });
+      return r.json();
+    });
+    log("the engine classifies a .onion as unavailable, with no coordinate",
+        geo.class === "unavailable" && geo.lat === null && geo.lng === null);
+    log("the engine's refusal chain says no DNS query was issued",
+        JSON.stringify(geo.resolution_chain ?? []).includes("No DNS query was issued"));
+
+    const sources = await page.evaluate(async () => {
+      const r = await fetch("/api/engine/geo/sources", { cache: "no-store" });
+      return r.json();
+    });
+    log("/geo/sources states the passivity rule",
+        /never resolves a \.onion/i.test(sources.passivity ?? ""));
+    log("/geo/sources never renders a key value",
+        (sources.providers ?? []).every((p) => "key_present" in p && !("api_key" in p)));
   }
 
   // ------------------------------------------- the command panel (DEC-058/059/060)

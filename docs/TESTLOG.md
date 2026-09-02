@@ -1188,3 +1188,110 @@ Stated rather than implied:
 AuthZ matrix green (351 + 162 assertions, both sides), TOTP green including
 replay and drift, every mutation in the signed chain, zero `innerHTML` /
 `document.write` in the tree. **DEC-058, DEC-059, DEC-060.**
+
+---
+
+## v2.1 Phase 5 — SANGAM Pro
+
+| Check | Phase 4 | Phase 5 | Result |
+|---|---|---|---|
+| `npm test` | 885 passed | **916 passed** (24 files) | **PASS** |
+| `npm run lint` | clean | clean | **PASS** |
+| `npm run build` | clean | clean, `/sangam` 121 kB | **PASS** |
+| `uv run pytest -q` | 401 passed | **452 passed** / 17 skipped | **PASS** |
+| `journey.mjs` | 108/108 | **123/123** (15 new SANGAM checks) | **PASS** |
+| `forge test` | not run | not run | **CONDITION** |
+
+**Total: 1,491 green** (916 web · 452 engine · 123 e2e).
+
+### FINDING-09 — a live INV-1 violation, found and fixed
+
+`routers/geo.py::_resolve` handed **any** host to `socket.gethostbyname()`,
+including a `.onion`. Proven with a spy before touching anything:
+
+```
+gethostbyname called with: ['secretmarketxyz.onion']
+INV-1 VIOLATED
+```
+
+The lookup failed, so the response looked correct. But the query was issued, and
+INV-1 is about what the process **does**. The existing spy in `test_infra.py`
+patched `socket.getaddrinfo` — a different function — and never covered the geo
+router at all.
+
+Five spy tests now cover it, including one against the **original** code path,
+which is still exported and still reachable. The check runs before the cache and
+before any socket call: anywhere later, a cached or racing path could still
+issue the lookup.
+
+### FINDING-06 — fixed, and its `it.fails` tests flipped to real assertions
+
+Pinned as `it.fails` in Phase 0b so the suite stayed green while the defect
+stayed visible, carried through Phases 1–4, and closed here. The three cases are
+now ordinary assertions — which is exactly what "the tests flip the moment
+someone fixes it" was for.
+
+### New coverage
+
+| File | Tests | Covers |
+|---|---|---|
+| `test_geo_classify.py` | 51 | **Five INV-1 spies**; exhaustive class assignment; the "not a measured location" sentence; derived precision (1 dp, no city, no ASN); **no jitter** (AST-scanned, not text-scanned); **determinism across processes** (two subprocesses compared); freshness; payload honesty (no `""`, no `"unknown"`, no `"N/A"`); `ttl` stays null with the reason written down; the four new endpoints |
+| `sangamClass.test.ts` | 30 | Shape-not-colour; GeoJSON and CSV **class round-trip**; unavailable points exported with null geometry rather than dropped; comparison refused with a written reason when either point is derived; CSV quoting and escaping |
+| `geoderive.test.ts` | 18 → 19 | FINDING-06's three cases, now passing normally |
+
+### New e2e coverage — 15 checks
+
+```
+PASS  the legend names all three coordinate classes — 3 rows
+PASS  the legend carries the 'not a measured location' sentence
+PASS  the legend says an unavailable point is not plotted
+PASS  all three classes are represented on screen — resolved, derived, unavailable
+PASS  a .onion lookup is REFUSED BY DESIGN, not merely unresolved
+PASS  the refused onion appears in the unplaced panel with its reason
+PASS  clicking a resolved marker shows its resolution chain — 4 steps
+PASS  the chain runs host -> DNS -> geo-IP -> coordinate
+PASS  every chain step carries a timestamp
+PASS  a field with no value reads 'not available', never blank
+PASS  the cache age is shown rather than hidden
+PASS  the engine classifies a .onion as unavailable, with no coordinate
+PASS  the engine's refusal chain says no DNS query was issued
+PASS  /geo/sources states the passivity rule
+PASS  /geo/sources never renders a key value
+SKIP  derived marker detail — none in this actor's footprint
+```
+
+The chain shown in the browser is genuinely live: `host example.com` → `A/AAAA →
+104.20.23.154, 172.66.147.243, 2606:4700:…` → `ipwho.is → San Francisco, United
+States` → `37.7749113, -122.4185412 — measured`, with `AS13335 Cloudflare, Inc.`
+and a cache age of 136 s in the drawer. Reverse DNS, TTL and Derivation all read
+**not available**, which is what an absent field must look like.
+
+Two Phase 0b SANGAM checks were made **flag-aware**, not deleted: SANGAM Pro
+replaces the confidence list and the WORKBENCH link with a class legend and an
+actor selector, so the old assertions would fail against a correct build. The
+journey detects which map it is looking at, as it already does for the workspace
+and command flags.
+
+### What is NOT built
+
+- **Four of the ten layers are declared but inert**: certificate reuse, persona
+  overlay, ASN clustering and jurisdiction render their legend rows and toggle
+  state but draw nothing yet. `/geo/certificate-links` exists and is tested; the
+  map does not yet read it. The temporal scrubber, movement trails and the
+  density heat map are not implemented at all.
+- **`/geo/asn` returns a null ASN.** Team Cymru's interface is DNS TXT, which the
+  stdlib cannot read and `dnspython` is not a dependency; the fallback returns
+  the operator name where a keyless HTTP source answers and **nulls** otherwise,
+  rather than a guess. The ASN that *does* appear in the UI comes from
+  `ipwho.is` alongside the geo lookup.
+- **UNAVAILABLE does not appear in any actor's footprint**, because no actor in
+  this dataset carries a `.onion` identifier. The class is fully implemented and
+  tested; it is demonstrated in the product through the host-lookup box, which is
+  §5.3's search and shows the refusal on real input.
+
+### Verdict
+
+**PHASE 5 GATE: GREEN, with six of ten layers unbuilt.** Three classes visually
+distinct by shape, every point clickable with a timestamped chain, no fabricated
+coordinate anywhere (FINDING-06 closed), and `.onion` never resolved (FINDING-09
+closed, with spies). **DEC-061, DEC-062.**

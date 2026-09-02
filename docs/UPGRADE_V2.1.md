@@ -410,7 +410,64 @@ and `PASSWORD_PEPPER`; without them it refuses with a 503 naming the variable.
 
 ### Next
 
-**Phase 5 — SANGAM Pro.** The three-class coordinate model (RESOLVED / DERIVED / UNAVAILABLE), ten
-layers, and the clickable resolution chain. **FINDING-06 lands here** — `lib/geoderive.ts` still emits
-a Binance off-ramp for every actor, stamped `inferred: false`; its two `it.fails` tests flip green the
-moment it is fixed.
+**Phase 5 — SANGAM Pro.**
+
+---
+
+## Phase 5 — SANGAM Pro
+
+**Status: COMPLETE, with six of ten layers unbuilt. DEC-061, DEC-062.**
+
+| Check | Phase 4 | Phase 5 |
+|---|---|---|
+| `npm test` | 885 | **916 passed** |
+| `uv run pytest -q` | 401 | **452 passed** / 17 skipped |
+| `journey.mjs` | 108/108 | **123/123** |
+| `npm run lint` / `build` | clean | clean; `/sangam` 121 kB |
+| `forge test` | not run | not run — same stated condition |
+
+**1,491 green.**
+
+### Two findings closed
+
+- **FINDING-09 (new, INV-1, Critical).** `routers/geo.py` handed **any** host to
+  `socket.gethostbyname()`, including a `.onion`. Proven with a spy before fixing: the query *was*
+  issued. The existing spy test patched a different function and never covered the geo router. Five
+  spies now do, including one against the original code path.
+- **FINDING-06 (from Phase 0b).** The fabricated Binance off-ramp is gone; its three `it.fails` tests
+  are now ordinary assertions.
+
+### What changed
+
+1. **`engine/geo/classify.py`** — the three classes, the derivation rules, 1-dp rounding, freshness.
+2. **`engine/geo/resolve.py`** — the onion guard **first**, a timestamped resolution chain, ASN and
+   reverse DNS, and a disk cache whose age is shown rather than hidden.
+3. **`routers/geo.py`** — extended, not rewritten: the old fields still return, four endpoints added.
+4. **`lib/sangamClass.ts`** — shape-not-colour, comparison refusal, class-preserving GeoJSON/CSV.
+5. **`components/sangam/SangamPro.tsx`** — legend, marker list, unplaced panel, resolution chain,
+   re-resolve, host lookup.
+
+### What is NOT built
+
+- Six of the ten layers: certificate reuse, persona overlay, ASN clustering and jurisdiction render
+  their toggles but draw nothing; the temporal scrubber, movement trails and density heat map are
+  absent entirely.
+- `/geo/asn` returns a null ASN (Cymru's interface is DNS TXT; `dnspython` is not a dependency). The
+  ASN shown in the UI comes from `ipwho.is`.
+- UNAVAILABLE does not appear in any actor's footprint, because no actor in this dataset carries a
+  `.onion`. It is demonstrated through the host-lookup box instead.
+
+### Rollback
+
+```bash
+git revert <phase-5-sha>
+```
+
+### Flag state
+
+`NEXT_PUBLIC_FF_SANGAM_PRO=1` in `web/.env.local` — **on**, its gate having passed.
+
+### Next
+
+**Phase 6 — footer and cross-version linking.** Small: a real footer on every page linking PRAHARI v1
+at `https://prahari-6njh.onrender.com`, with a status dot fed by Phase 7's keep-alive poll.
