@@ -110,8 +110,15 @@ async function forward(req: NextRequest, path: string, method: "GET" | "POST") {
       return offline("Engine returned a malformed response.");
     }
   } catch (err) {
+    // A timeout here means BOTH attempts ran out — so the engine is asleep and
+    // slow to wake, not gone. serviceStatus.ts already draws that distinction
+    // for the footer dot ("waking", never "offline"); the data panels said
+    // "unreachable" for the same condition and contradicted it. Same vocabulary
+    // now, and the number a judge needs instead of a vague "please wait".
     return offline(
-      isTimeout(err) ? "Engine did not respond in time." : "Engine unreachable."
+      isTimeout(err)
+        ? "Engine is waking — a free-tier cold start takes 30–60 s. Reload shortly."
+        : "Engine unreachable."
     );
   }
 }
