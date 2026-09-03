@@ -33,11 +33,25 @@ export function detailOf(d: unknown, fallback = "The engine did not answer."): s
 }
 
 async function call<T>(path: string, init?: RequestInit): Promise<T | EngineError> {
+  let res: Response;
   try {
-    const res = await fetch(`/api/engine/${path}`, { cache: "no-store", ...init });
+    res = await fetch(`/api/engine/${path}`, { cache: "no-store", ...init });
+  } catch {
+    // The proxy itself never answered: the web service is down, or the browser
+    // is offline. This is the only case that is genuinely "unreachable".
+    return { ok: false, engine: "offline", detail: "Engine unreachable." };
+  }
+  try {
     return (await res.json()) as T;
   } catch {
-    return { ok: false, engine: "offline", detail: "Engine unreachable." };
+    // The proxy answered with something that is not JSON. Report the status we
+    // actually got — reporting "unreachable" here once hid a suspended engine
+    // behind a message that pointed at the network instead.
+    return {
+      ok: false,
+      engine: "offline",
+      detail: `The engine proxy returned a non-JSON response (HTTP ${res.status}).`,
+    };
   }
 }
 

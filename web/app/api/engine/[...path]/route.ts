@@ -15,7 +15,14 @@ const ENGINE_URL = /^https?:\/\//.test(RAW_ENGINE_URL) ? RAW_ENGINE_URL : `https
 
 // Fusion and audit routes do real computation. A cold first call took ~20s and
 // an 8s ceiling reported it as "engine offline" on a healthy engine.
+//
+// The engine sleeps on Render's free plan. A measured cold start took 77s — past
+// this ceiling — so the FIRST call after an idle period timed out and the
+// workbench declared a healthy engine dead. One attempt cannot both fail fast on
+// a real outage and survive a cold start, so we do two: the first ends at 45s
+// (having woken the instance), the retry lands on a warm engine.
 const TIMEOUT_MS = 45_000;
+const RETRY_TIMEOUT_MS = 60_000;
 
 // An allowlist, not a passthrough: a future engine admin route must not be
 // reachable from the browser by guessing.
@@ -48,21 +55,44 @@ async function forward(req: NextRequest, path: string, method: "GET" | "POST") {
   const url = new URL(`${ENGINE_URL}/${path}`);
   req.nextUrl.searchParams.forEach((v, k) => url.searchParams.append(k, v));
 
-  const init: RequestInit = {
-    method,
-    headers: { "Content-Type": "application/json" },
-    signal: AbortSignal.timeout(TIMEOUT_MS),
-    cache: "no-store",
-  };
-  if (method === "POST") init.body = await req.text();
+  const body = method === "POST" ? await req.text() : undefined;
+
+  const attempt = (timeoutMs: number) =>
+    fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(timeoutMs),
+      cache: "no-store",
+      ...(body === undefined ? {} : { body }),
+    });
+
+  const isTimeout = (e: unknown) => e instanceof Error && e.name === "TimeoutError";
 
   try {
-    const res = await fetch(url, init);
+    let res: Response;
+    try {
+      res = await attempt(TIMEOUT_MS);
+    } catch (err) {
+      // Retry only GET. POST routes seal the ledger and anchor on-chain; a
+      // replay of one is worse than an honest timeout.
+      if (!isTimeout(err) || method !== "GET") throw err;
+      res = await attempt(RETRY_TIMEOUT_MS);
+    }
+
     const text = await res.text();
     const ct = res.headers.get("content-type") ?? "";
 
     // Exports are CSV/PDF/JSON attachments; stream them through unchanged.
     if (!ct.includes("application/json")) {
+      // ...but only on success. A failing upstream answers in HTML — Render's
+      // "This service has been suspended by its owner." page, a 502, a 504 —
+      // and streaming that HTML back made the browser's res.json() throw, so
+      // the workbench blamed an unreachable engine and hid the real cause.
+      if (!res.ok) {
+        return offline(
+          `Engine returned HTTP ${res.status}. Check that ENGINE_URL points at a running engine.`
+        );
+      }
       return new NextResponse(text, {
         status: res.status,
         headers: {
@@ -80,9 +110,8 @@ async function forward(req: NextRequest, path: string, method: "GET" | "POST") {
       return offline("Engine returned a malformed response.");
     }
   } catch (err) {
-    const timedOut = err instanceof Error && err.name === "TimeoutError";
     return offline(
-      timedOut ? "Engine did not respond in time." : "Engine unreachable."
+      isTimeout(err) ? "Engine did not respond in time." : "Engine unreachable."
     );
   }
 }

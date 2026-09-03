@@ -52,12 +52,12 @@ The engine is a Docker web service. Render's free plan sleeps after ~15 min idle
 and cold-starts in ~30–60 s — perfectly fine for a demo.
 
 1. Go to **render.com → New → Blueprint**, pick the `Prahari` repo. Render reads
-   `render.yaml` and proposes the `prahari-engine` service. Click **Apply**.
+   `render.yaml` and proposes the `prahari-v2-engine` and `prahari-v2-web` services. Click **Apply**.
    *(Or: New → Web Service → Docker → set Dockerfile path `engine/Dockerfile`,
    context `.`, plan Free, health check `/health`.)*
 2. First build takes ~5–10 min (it installs scipy/sklearn/spacy/Tor). When it is
-   live you get a URL like `https://prahari-engine.onrender.com`.
-3. Test it: open `https://prahari-engine.onrender.com/health` → `{"ok": true …}`.
+   live you get a URL like `https://prahari-v2-engine.onrender.com`.
+3. Test it: open `https://prahari-v2-engine.onrender.com/health` → `{"ok": true …}`.
 
 **Env vars** (already defaulted in `render.yaml`, override in the dashboard if
 needed): `ENVIRONMENT=production`, `RPC_URL`, `CHAIN_ID=80002`, `CORS_ORIGINS=*`.
@@ -77,7 +77,7 @@ Add `ANCHORER_KEY=0x…` **only** if you want the deployed engine to seal on-cha
 2. **Set Root Directory to `web`** (it is a monorepo). Framework auto-detects as
    Next.js.
 3. Add **Environment Variables** (Settings → Environment Variables):
-   - `ENGINE_URL` = your Render URL, e.g. `https://prahari-engine.onrender.com`
+   - `ENGINE_URL` = your Render URL, e.g. `https://prahari-v2-engine.onrender.com`
      *(server-side only — the browser never sees it)*
    - `NEXTAUTH_SECRET` = a strong random string → `openssl rand -base64 32`
    - `NEXTAUTH_URL` = your Vercel URL, e.g. `https://prahari.vercel.app`
