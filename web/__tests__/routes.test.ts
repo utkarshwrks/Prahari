@@ -123,13 +123,34 @@ describe("the feature flag gates the shell, not the routes", () => {
     expect(layout).toMatch(/if \(!FEATURES\.workspaceRoutes\) return <>\{children\}<\/>/);
   });
 
-  it("/workbench serves the cockpit via a rewrite when the flag is off", () => {
-    // Branching inside page.tsx put BOTH components in the bundle: 256 kB
-    // first-load JS against 103 kB for the Overview alone, because the dead
-    // branch dragged three.js in. The rewrite splits them at the routing layer.
+  it("/workbench serves the cockpit with NO rewrite, in either build", () => {
+    // There used to be a rewrite here. Branching inside page.tsx put BOTH
+    // components in one bundle -- 256 kB first-load against 103 kB -- so a
+    // rewrite split them at the routing layer instead.
+    //
+    // The split is at the routing layer already now: /workbench IS the cockpit
+    // and the Overview has its own route. The rewrite is not merely redundant,
+    // it is an OUTAGE -- /workbench rewrote to /workbench/classic, which now
+    // redirects back to /workbench. Measured in a real flag-off build: 173,751
+    // navigations for one page load.
+    //
+    // So its absence is the assertion. This is the regression test.
     const cfg = readFileSync(join(ROOT, "next.config.mjs"), "utf8");
-    expect(cfg).toContain("NEXT_PUBLIC_FF_WORKSPACE");
-    expect(cfg).toContain("/workbench/classic");
+    expect(cfg).not.toMatch(/^\s*async rewrites\(/m);
+    expect(cfg).not.toContain('destination: "/workbench/classic"');
+    expect(read("workbench/page.tsx")).toContain("@/components/workbench/Workbench");
+  });
+
+  it("the routed dashboard is not an orphan when the flag is off", () => {
+    // layout.tsx only wraps children in the shell when the flag is on, so with
+    // it off this page would render with no rail, no breadcrumbs and no way
+    // back -- reachable only by typing its URL.
+    const overview = read("workbench/overview/page.tsx");
+    expect(overview).toContain("FEATURES.workspaceRoutes");
+    expect(overview).toContain('redirect("/workbench")');
+    // And the button that points at it is behind the same flag.
+    const header = readSrc("components/workbench/Header.tsx");
+    expect(header).toContain("FEATURES.workspaceRoutes &&");
   });
 
   it("the flag defaults off, so the legacy surface is what ships untouched", () => {

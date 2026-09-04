@@ -412,6 +412,26 @@ class TestSecretHandling:
         with pytest.raises(RuntimeError, match="ENGINE_SERVICE_SECRET"):
             service_secret()
 
+    def test_the_refusal_also_arms_on_ENVIRONMENT(self, monkeypatch):
+        """The variable the DEPLOYMENT actually sets.
+
+        render.yaml sets ENVIRONMENT, not ENGINE_ENV, so for as long as this
+        function read only ENGINE_ENV the production refusal never armed and a
+        deployed engine silently signed admin tokens with the public DEV_SECRET.
+        """
+        monkeypatch.delenv("ENGINE_SERVICE_SECRET", raising=False)
+        monkeypatch.delenv("ENGINE_ENV", raising=False)
+        monkeypatch.setenv("ENVIRONMENT", "production")
+        with pytest.raises(RuntimeError):
+            service_secret()
+
+    def test_prod_is_accepted_as_well_as_production(self, monkeypatch):
+        monkeypatch.delenv("ENGINE_SERVICE_SECRET", raising=False)
+        monkeypatch.delenv("ENGINE_ENV", raising=False)
+        monkeypatch.setenv("ENVIRONMENT", "prod")
+        with pytest.raises(RuntimeError):
+            service_secret()
+
     def test_permission_lookup_is_denied_by_absence(self):
         assert permission_for("nonsense", "GET") is None
         assert permission_for("users", "PUT") is None

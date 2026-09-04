@@ -1,21 +1,26 @@
 /** @type {import('next').NextConfig} */
 
 /**
- * The workspace flag is read here as well as in `lib/features.ts` (DEC-056).
+ * The workspace flag no longer needs a rewrite here (DEC-056, then DEC-076).
  *
- * `/workbench` must be the Overview when the flag is on and the original
- * single-page cockpit when it is off. Expressing that as a branch inside
- * `app/workbench/page.tsx` meant BOTH components entered the route's bundle --
- * measured at 256 kB first-load JS against 103 kB for the Overview alone,
- * because the dead branch dragged the cockpit and three.js in with it. A
- * dynamic import did not help: Next's client-reference graph includes both.
+ * It used to. `/workbench` had to be the Overview with the flag on and the
+ * single-page cockpit with it off, and branching inside `app/workbench/page.tsx`
+ * pulled BOTH components into the route bundle -- 256 kB first-load JS against
+ * 103 kB, because the dead branch dragged the cockpit and three.js in with it.
+ * A rewrite split them at the routing layer instead.
  *
- * A rewrite splits them at the routing layer instead. The URL the analyst sees
- * is unchanged, the cockpit served is byte-for-byte the same component, and
- * neither build pays for the branch it does not use.
+ * The cockpit is now what `/workbench` renders in BOTH builds, and the Overview
+ * has its own route at `/workbench/overview`, so the split is already at the
+ * routing layer and neither build pays for the branch it does not use. The
+ * rewrite has nothing left to do.
+ *
+ * It is REMOVED rather than left in place, because leaving it was an outage:
+ * `/workbench` rewrote to `/workbench/classic`, which now redirects back to
+ * `/workbench`, which rewrote again. Measured in a real flag-off build before
+ * this was taken out: 173,751 navigations for one page load. The flag-on build
+ * -- the only one exercised locally -- could never have shown it, because the
+ * rewrite is empty when the flag is on.
  */
-const WORKSPACE_ON = process.env.NEXT_PUBLIC_FF_WORKSPACE === "1";
-
 const nextConfig = {
   reactStrictMode: true,
 
@@ -36,22 +41,6 @@ const nextConfig = {
    * the correct trade for a surface we do not use.
    */
   images: { unoptimized: true },
-  async rewrites() {
-    // Flag off: /workbench serves the classic cockpit, exactly as before.
-    //
-    // `beforeFiles`, not the default bare array. A bare array is `afterFiles`,
-    // which only applies when NO page matched -- and `app/workbench/page.tsx`
-    // always matches, so the rewrite silently never fired and the flag-off
-    // build served the Overview. Caught by running the journey against a
-    // flag-off build; nothing in the flag-on gate could have found it.
-    return {
-      beforeFiles: WORKSPACE_ON
-        ? []
-        : [{ source: "/workbench", destination: "/workbench/classic" }],
-      afterFiles: [],
-      fallback: [],
-    };
-  },
 };
 
 export default nextConfig;

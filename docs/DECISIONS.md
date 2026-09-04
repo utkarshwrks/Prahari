@@ -1916,3 +1916,58 @@ is allowed to be wrong in** — a corrupt artifact refuses to ping, a killed
 runner leaves a claim that overstates rather than vanishes, an overlap is billed
 once, and a first run is not confused with a corrupt one. Each has a plausible
 refactor that silently reverses it.
+
+---
+
+### DEC-076 · The rewrite that became an outage, and the flags nothing set
+
+Making the classic cockpit the default landing (`/workbench`) was a two-line
+change to a route. It was also, in the build Render actually ships, a total
+outage — and nothing in the flag-on gate could have shown it.
+
+**The loop.** DEC-056 kept a rewrite in `next.config.mjs`: with the workspace
+flag off, `/workbench` rewrote to `/workbench/classic`. That rewrite existed for
+a real reason — branching inside `page.tsx` put both components in one bundle,
+256 kB first-load against 103 kB, because the dead branch dragged three.js in.
+But once `/workbench` became the cockpit and the Overview moved to
+`/workbench/overview`, the split was already at the routing layer and the
+rewrite had nothing left to do except this:
+
+```
+/workbench --rewrite--> /workbench/classic --redirect--> /workbench --rewrite--> ...
+```
+
+Measured in a real flag-off production build: **173,751 navigations for one page
+load.** Local work never saw it, because every flag is on in `.env.local` and the
+rewrite is empty when the flag is on. The lesson is not "remove the rewrite"; it
+is that a config branch keyed on a flag is only ever exercised in one direction
+unless something builds the other one on purpose.
+
+**The orphan.** `app/workbench/layout.tsx` wraps children in the workspace shell
+only when the flag is on. So a flag-off build served `/workbench/overview` with
+no rail, no breadcrumbs and no way back, and the cockpit header offered a button
+straight to it. Both are now behind the flag: the route redirects to
+`/workbench`, and the button is not rendered. A button offering a view the build
+cannot render is worse than no button.
+
+**The flags nothing set.** `render.yaml` set none of the `NEXT_PUBLIC_FF_*`
+vars, and they are inlined at BUILD time. Every v2.1 surface on the deployed
+branch — the routed workspace, the graph lab, the Command Panel, SANGAM Pro —
+was therefore unreachable in the deployed build, as though none of it had been
+written. They are set explicitly now, with the consequence stated where a reader
+will meet it: setting them on a running service changes nothing; the service
+must rebuild.
+
+**The guard whose trigger nothing pulled.** Turning the Command Panel on exposed
+a pre-existing hole. `engine/admin/auth.py` refuses to serve `/admin` in
+production without `ENGINE_SERVICE_SECRET`, falling back to a public `DEV_SECRET`
+otherwise — and it armed that refusal on `ENGINE_ENV`, a variable no deployment
+set. `render.yaml` sets `ENVIRONMENT`; `settings.py` reads `environment`. So on
+the live engine the refusal never armed, and anyone who read this open-source
+repository could mint an admin token against it.
+
+The fix is in the code, not only in the deploy config, because a guard that
+depends on a deployment remembering to set the right variable name is not a
+guard: `service_secret()` now arms on `ENGINE_ENV` **or** `ENVIRONMENT`, and both
+are set alongside a generated secret shared to the web service via `fromService`.
+Two tests cover the variable the deployment actually sets.
