@@ -129,6 +129,13 @@ jobs:
           fi
           echo "clean"
 
+      # The keep-alive guard decides whether to ping services that a blown
+      # free-tier budget would SUSPEND, so its fail-closed properties are
+      # tested here rather than trusted. Stdlib-only and run with the system
+      # python on purpose: this job installs nothing.
+      - name: Keep-alive guard and runner
+        run: python3 -m unittest discover -s scripts -p 'test_*.py' -v
+
       # The product has exactly one name.
       - name: Product name is PRAHARI
         run: |

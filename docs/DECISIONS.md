@@ -1828,3 +1828,91 @@ caches  : signals warm, actors_index warm
 Twenty-one seconds after a cold boot, with the actors index already built. The
 same engine before DEC-066 reported `actors_index: false` at fifteen seconds
 while calling itself healthy.
+
+---
+
+### DEC-075 · The cron was never the mechanism, because the cron never ran
+
+DEC-064 sized a warm window and DEC-065 built a guard that fails closed. Both
+were correct, and the services still slept through their own window. The reason
+was not in either of them.
+
+**The measurement.** The workflow asked for `*/5` across a ten-hour window —
+about 120 runs a day. GitHub's API reports what it actually delivered:
+
+```
+2026-09-04T07:37:45Z  schedule  success
+2026-09-03T16:29:23Z  schedule  success
+2026-09-03T12:15:03Z  schedule  success
+2026-09-03T07:39:10Z  schedule  success
+```
+
+**Four runs in two days against 240 requested — about 2%.** The budget artifact
+agreed: three recorded pings for the month. GitHub documents `schedule` as
+best-effort and drops high-frequency crons under load, and a ping every four to
+nine hours is nothing against a fifteen-minute idle timer. Confirmed directly:
+`GET /health/ping` at 08:45 UTC, mid-window, took **67 seconds** — the probe
+that was supposed to find the engine awake cold-started it instead.
+
+So the fault was never the ping, the window, or the guard. It was that a
+keep-alive whose accuracy depends on a best-effort trigger firing 120 times a
+day has no accuracy at all.
+
+#### The trigger stops needing to be frequent
+
+One run now holds a single job for a **5.5-hour segment**, ticking every five
+minutes from inside it, and dispatches its own successor before it starts. The
+chain needs the scheduler to work **once**, not 120 times a day.
+`workflow_dispatch` fired with `GITHUB_TOKEN` is one of the two events GitHub
+permits to start a new run, which is what makes the chain self-sustaining. Two
+low-frequency crons remain as a way back in, not as the mechanism: `50 2 * * *`
+to open the day inside the engage lead, and `9 * * * *` to recover a chain that
+broke mid-window.
+
+This is affordable only because the repository is **public**: standard runners
+are free and unmetered there. The scarce resource is unchanged — Render's 750
+instance hours — and every tick still asks the guard for permission.
+
+#### A runner is not held to do nothing
+
+The obvious version of this idles a runner through the fourteen hours the window
+is shut. That is wasteful and the least defensible part of the design under
+Actions' acceptable use, so a run that lands outside the window **exits in
+seconds and does not chain** — if it chained, its successor would start
+immediately, exit immediately, and dispatch again in a tight loop. A **30-minute
+engage lead** keeps the handover punctual: the 02:50 cron lands inside the lead,
+sleeps to 03:00 and starts ticking on the window. A segment that outlives the
+window ends at the close rather than idling to its deadline.
+
+#### Accounting had to change with it
+
+Per-ping timestamps were right for a workflow that woke, pinged once and exited.
+A segment holds a service awake across hours, so it records an **interval**, and
+the two are merged as a **union** — a month can hold both, and billing an
+overlap twice would narrow the window for no reason.
+
+The failure that matters is a runner reclaimed mid-segment, which happens. So a
+segment **reserves its interval up front and pushes the claim before pinging**,
+then settles it to the real value when it finishes. Reserving inside the runner
+and committing only at the end would lose the claim in exactly the case it
+exists for. An unsettled claim **overstates** usage; a lost one understates it,
+and understating is what lets the next segment sail past a pool whose exhaustion
+suspends the services. A settled segment bills from its first ping to its last
+plus the spin-down tail, because that tail is awake time the ping caused.
+
+#### What is still impossible, unchanged
+
+Two services awake 24/7 need 2 x 730 = 1,460 hours against a pool of 750. **No
+schedule fixes that.** Ten hours a day is what the arithmetic allows, and the
+honest way past it is deployment, not scheduling: moving the Next.js frontend to
+a host that does not sleep leaves the whole pool to the engine, or roughly
+**20 h/day** for one service instead of 10 h/day for two.
+
+#### Tested, because the directions matter more than the arithmetic
+
+`scripts/test_keepalive.py` runs in CI on the standard library alone. It does
+not protect the arithmetic, which is easy; it protects the **directions the code
+is allowed to be wrong in** — a corrupt artifact refuses to ping, a killed
+runner leaves a claim that overstates rather than vanishes, an overlap is billed
+once, and a first run is not confused with a corrupt one. Each has a plausible
+refactor that silently reverses it.

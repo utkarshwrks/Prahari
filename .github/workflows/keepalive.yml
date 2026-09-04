@@ -1,18 +1,38 @@
-# Keep-alive for the free Render services (DEC-064, DEC-065).
+# Keep-alive for the free Render services (DEC-064, DEC-065, DEC-075).
 #
-# VERIFIED FIGURES, from Render's live documentation on 2026-09-03:
+# WHY THIS IS NOT A `*/5` CRON ANY MORE.
+#
+# It was one, and it did not work. Measured on this repo over 2026-09-03..04
+# the schedule asked for ~120 runs a day and GitHub delivered FOUR IN TWO DAYS:
+# 07:39, 12:15, 16:29 on the 3rd and 07:37 on the 4th. GitHub documents
+# `schedule` as best-effort and drops high-frequency crons under load. Against
+# Render's fifteen-minute idle timer, a ping every four to nine hours keeps
+# nothing awake -- the services slept through their own warm window, and what a
+# user saw was the project being down.
+#
+# So the trigger is no longer the thing that has to be frequent. ONE run holds a
+# single job for a 5.5-hour SEGMENT, ticking every five minutes from inside it,
+# and then dispatches its own successor. The chain needs the scheduler to work
+# ONCE, not a hundred and twenty times a day. `workflow_dispatch` fired with
+# GITHUB_TOKEN is one of the two events GitHub permits to start a new run, so
+# the chain sustains itself; the hourly cron below is only a way back in if a
+# link ever breaks.
+#
+# This is affordable because the repo is PUBLIC: standard runners are free and
+# unmetered there, so the runner's wall clock costs nothing.
+#
+# VERIFIED RENDER FIGURES, from Render's live documentation on 2026-09-03:
 #   * 750 free instance hours per WORKSPACE per calendar month, SHARED across
-#     every free service — not granted per service.
+#     every free service -- not granted per service.
 #   * A free web service spins down after 15 minutes without inbound traffic.
 #   * Spin-up takes about one minute.
 #   * Hours are consumed only while running; a spun-down service consumes none.
 #
 # THE ARITHMETIC THOSE FIGURES FORCE.
 #
-# Budget is consumed by HOURS AWAKE, not by requests. So the ping INTERVAL is
-# free — pinging every 5 minutes instead of every 10 keeps a service awake for
-# exactly the same hours and simply makes waking more reliable. What costs
-# budget is (a) how long the window is and (b) how many services share the pool.
+# Budget is consumed by HOURS AWAKE, not by requests, so the tick interval is
+# free. What costs budget is how long the window is and how many services share
+# the pool:
 #
 #   3 services (engine + web + v1):  750 x 0.85 / 3 / 30.44 =  6.98 h/day each
 #   2 services (engine + web):       750 x 0.85 / 2 / 30.44 = 10.47 h/day each
@@ -20,150 +40,202 @@
 # v1 is a separate demo that nobody is mid-investigation on, so it is OPT-IN
 # (PING_V1=0). That buys engine and web a TEN-HOUR window instead of seven.
 #
-# The window is 03:00–13:00 UTC = 08:30–18:30 IST: a full Indian working day.
-# Change WINDOW_START/END together with the cron below; they must agree, and the
-# workflow refuses to run if they do not.
+# The window is 03:00-13:00 UTC = 08:30-18:30 IST: a full Indian working day,
+# and it is sized to land just under the 10.47 h/day the pool allows.
 #
 # WHAT IS STILL IMPOSSIBLE, stated plainly: two services awake 24/7 need
 # 2 x 730 = 1,460 hours against a pool of 750. There is no schedule that keeps
-# these services up around the clock on the free tier. Ten hours a day is the
-# most the arithmetic allows, and outside it the UI says a cold start is coming
-# rather than pretending otherwise.
+# both up around the clock on the free tier. Ten hours a day is the most the
+# arithmetic allows -- and outside it the UI says a cold start is coming rather
+# than pretending otherwise. Moving the Next.js frontend to a host that does not
+# sleep would leave the whole pool to the engine (~20 h/day); that is the only
+# real way past this, and it is a deployment change, not a schedule change.
 
 name: keepalive
 
 on:
   schedule:
-    # Every 5 minutes, 03:00–12:59 UTC. Five costs nothing extra (hours are
-    # consumed while awake, not per request) and leaves headroom for TWO
-    # skipped runs against a 15-minute timeout — GitHub's cron is best-effort
-    # and is routinely delayed by several minutes under load.
-    - cron: "*/5 3,4,5,6,7,8,9,10,11,12 * * *"
+    # A WAY BACK IN, not the mechanism. The chain below is what keeps the
+    # services warm; these only have to land occasionally to start or restart
+    # it. Both are low-frequency, which is the kind GitHub actually delivers --
+    # the */5 this replaced was dropped roughly 97% of the time.
+    #
+    # 02:50 UTC opens the day: it lands inside the 30-minute lead, so the runner
+    # engages, sleeps to 03:00 and starts ticking exactly on the window.
+    - cron: "50 2 * * *"
+    # Hourly at :09, to recover a chain that broke mid-window. Off the hour on
+    # purpose -- :00 is the most congested slot GitHub has.
+    - cron: "9 * * * *"
   workflow_dispatch:
     inputs:
       dry_run:
         description: "Report what would be pinged, without pinging"
         type: boolean
+        default: false
+      chain:
+        description: "Dispatch a successor segment when this one ends"
+        type: boolean
         default: true
 
 concurrency:
+  # Never two runners pinging at once -- they would double-count against the
+  # budget artifact and race on the commit. `cancel-in-progress: false` keeps
+  # the live segment running and parks at most one successor behind it, which
+  # is precisely the chain we want: the queued run starts the moment this one
+  # ends.
   group: keepalive
   cancel-in-progress: false
 
 permissions:
   contents: write   # to commit the budget artifact
   issues: write     # to raise one when a target fails repeatedly
+  actions: write    # to dispatch the next segment
 
 env:
   WINDOW_START: "3"
   WINDOW_END: "13"
   FREE_HOURS_POOL: "750"
-  # Services sharing the pool that this workflow keeps warm. Must match
-  # PING_* below, and --services in the guard step.
+  # Services sharing the pool that this workflow keeps warm. Must match the
+  # PING_* flags below.
   KEPT_WARM: "2"
   PING_ENGINE: "1"
   PING_WEB: "1"
   # OPT-IN. v1 is a separate demo; keeping it warm would take the window from
   # ten hours to seven for the two services that matter. Set to "1" and change
-  # KEPT_WARM to 3 (and narrow the cron) if v1 must stay warm too.
+  # KEPT_WARM to 3 if v1 must stay warm too.
   PING_V1: "0"
+  # 5.5 h. The job timeout below is GitHub's 6 h ceiling minus slack for the
+  # settle, commit and chain steps, and the segment must finish inside it.
+  SEGMENT_MINUTES: "330"
+  # How early a run may engage before the window opens, so it can sleep to the
+  # opening and start ticking on it rather than minutes late.
+  LEAD_SECONDS: "1800"
+  TICK_SECONDS: "300"
+  ENGINE_URL: "https://prahari-v2-engine.onrender.com"
+  WEB_URL: "https://prahari-v2-web.onrender.com"
+  V1_URL: "https://prahari-6njh.onrender.com"
 
 jobs:
-  ping:
+  keepalive:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    # GitHub kills a job at 6 h. Stopping at 5 h 50 leaves the settle, commit
+    # and chain steps room to run -- a segment killed by the timeout leaves its
+    # budget reservation unsettled (safe, it overstates) but breaks the chain.
+    timeout-minutes: 350
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The runner commits the budget artifact at the end of the segment,
+          # and the default token needs the ref to push back to.
+          ref: ${{ github.ref_name }}
 
-      - name: Verify the window and the cron agree
-        run: |
-          # A schedule that disagrees with its own guard is a schedule that
-          # burns budget outside the window it claims to keep.
-          CRON_HOURS=$(grep -oE 'cron: "\*/5 [0-9,]+' .github/workflows/keepalive.yml | grep -oE '[0-9,]+$')
-          EXPECTED=$(seq -s, "${WINDOW_START}" $(( WINDOW_END - 1 )))
-          if [ "$CRON_HOURS" != "$EXPECTED" ]; then
-            echo "::error::cron hours ($CRON_HOURS) do not match WINDOW_START/END ($EXPECTED)"
-            exit 1
-          fi
-          echo "window $WINDOW_START:00-$WINDOW_END:00 UTC, cron hours $CRON_HOURS"
-
-      - name: Budget guard
-        id: guard
-        run: |
-          python3 scripts/keepalive_budget.py \
-            --state .github/keepalive-budget.json \
-            --pool "$FREE_HOURS_POOL" \
-            --services "$KEPT_WARM" \
-            --window-start "$WINDOW_START" --window-end "$WINDOW_END" \
-            >> "$GITHUB_OUTPUT"
-
-      - name: Ping
-        if: steps.guard.outputs.should_ping == 'true' && github.event.inputs.dry_run != 'true'
-        id: ping
-        run: |
-          set +e
-          FAILURES=""
-          ping_one () {
-            NAME="$1"; URL="$2"; ENABLED="$3"
-            [ "$ENABLED" = "1" ] || { echo "$NAME: disabled"; return; }
-            CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 90 "$URL")
-            echo "$NAME: HTTP $CODE ($URL)"
-            # A cold start is a slow 200, not a failure. Anything 2xx/3xx counts.
-            case "$CODE" in
-              2*|3*) ;;
-              *) FAILURES="$FAILURES $NAME" ;;
-            esac
-          }
-          ping_one engine "https://prahari-v2-engine.onrender.com/health/ping" "$PING_ENGINE"
-          ping_one web    "https://prahari-v2-web.onrender.com/api/health"     "$PING_WEB"
-          ping_one v1     "https://prahari-6njh.onrender.com/"                 "$PING_V1"
-          echo "failures=${FAILURES# }" >> "$GITHUB_OUTPUT"
-
-      - name: Warm the engine caches at the top of the window
-        # ONCE per window opening, not every ping. Warming builds the fusion
-        # signals, the calibrator and the actors index (~20 s cold), so the
-        # first real request of the day is fast rather than merely successful.
-        # /health/ping deliberately does none of this -- it must stay under
-        # 50 ms and touch nothing.
-        if: |
-          steps.guard.outputs.should_ping == 'true' &&
-          github.event.inputs.dry_run != 'true' &&
-          env.PING_ENGINE == '1'
-        run: |
-          HOUR=$(date -u +%H)
-          MIN=$(date -u +%M)
-          # The first slot of the window, and again mid-window in case the
-          # instance was recycled.
-          if [ "$HOUR" = "0$WINDOW_START" ] || [ "$HOUR" = "$WINDOW_START" ] || [ "$MIN" -lt 5 ]; then
-            RESP=$(curl -s --max-time 120 -X POST \
-              "https://prahari-v2-engine.onrender.com/health/warm" || echo '{}')
-            echo "warm: $RESP"
-          else
-            echo "not a warm slot; skipping"
-          fi
-
-      - name: Record the ping in the budget artifact
-        if: steps.guard.outputs.should_ping == 'true' && github.event.inputs.dry_run != 'true'
+      - name: Decide whether to engage at all
+        id: plan
+        # Cheap, and it runs before anything is dispatched or reserved. A run
+        # that lands outside the window (the hourly cron will, most of the time)
+        # stops here in a few seconds instead of holding a runner idle for five
+        # and a half hours.
         run: |
           python3 scripts/keepalive_budget.py \
             --state .github/keepalive-budget.json \
             --pool "$FREE_HOURS_POOL" --services "$KEPT_WARM" \
             --window-start "$WINDOW_START" --window-end "$WINDOW_END" \
-            --record
+            --lead-seconds "$LEAD_SECONDS" | tee -a "$GITHUB_OUTPUT"
+
+      - name: Chain the next segment
+        # UP FRONT, not last, and `if: always()` would not be enough: if this
+        # job is cancelled or hits the 350-minute timeout, no later step runs at
+        # all and the chain would die silently. Dispatching before the segment
+        # means the successor is already parked behind this run's concurrency
+        # group before anything can go wrong. It cannot start early -- the group
+        # holds it until this segment ends.
+        if: steps.plan.outputs.engage == 'true' && github.event.inputs.chain != 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          code=$(curl -sS -o /tmp/dispatch.json -w '%{http_code}' -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/keepalive.yml/dispatches" \
+            -d '{"ref":"${{ github.ref_name }}","inputs":{"dry_run":"false","chain":"true"}}')
+          if [ "$code" = "204" ]; then
+            echo "successor dispatched; it is queued behind this segment"
+          else
+            echo "::warning::could not dispatch a successor (HTTP $code) — the hourly cron is the fallback"
+            cat /tmp/dispatch.json || true
+          fi
+
+      - name: Reserve this segment's budget, and push the claim
+        id: reserve
+        if: steps.plan.outputs.engage == 'true'
+        # BEFORE the segment, and pushed immediately. A runner reclaimed
+        # mid-segment must leave an unsettled -- therefore OVERSTATED -- claim
+        # behind it. Reserving inside the runner and committing only at the end
+        # would lose the claim in exactly the case it exists for.
+        run: |
+          python3 scripts/keepalive_budget.py \
+            --state .github/keepalive-budget.json \
+            --pool "$FREE_HOURS_POOL" --services "$KEPT_WARM" \
+            --window-start "$WINDOW_START" --window-end "$WINDOW_END" \
+            --reserve-minutes "$SEGMENT_MINUTES" >> "$GITHUB_OUTPUT"
+          cat "$GITHUB_OUTPUT"
           git config user.name  "prahari-keepalive"
           git config user.email "keepalive@users.noreply.github.com"
           git add .github/keepalive-budget.json
-          git diff --staged --quiet || git commit -m "chore(keepalive): budget [skip ci]"
-          git push || echo "::warning::could not push the budget artifact"
+          git diff --staged --quiet || {
+            git commit -m "chore(keepalive): reserve segment [skip ci]"
+            git pull --rebase --autostash origin "${{ github.ref_name }}" && git push \
+              || echo "::warning::could not push the reservation"
+          }
+
+      - name: Run the segment
+        id: run
+        if: steps.plan.outputs.engage == 'true'
+        run: |
+          ARGS=""
+          [ "$PING_ENGINE" = "1" ] && ARGS="$ARGS --target engine=$ENGINE_URL/health/ping"
+          [ "$PING_WEB"    = "1" ] && ARGS="$ARGS --target web=$WEB_URL/api/health"
+          [ "$PING_V1"     = "1" ] && ARGS="$ARGS --target v1=$V1_URL/"
+          WARM=""
+          [ "$PING_ENGINE" = "1" ] && WARM="--warm-url $ENGINE_URL/health/warm"
+          python3 scripts/keepalive_run.py \
+            --state .github/keepalive-budget.json \
+            --pool "$FREE_HOURS_POOL" \
+            --services "$KEPT_WARM" \
+            --window-start "$WINDOW_START" --window-end "$WINDOW_END" \
+            --minutes "$SEGMENT_MINUTES" \
+            --tick-seconds "$TICK_SECONDS" \
+            --lead-seconds "$LEAD_SECONDS" \
+            --reservation "${{ steps.reserve.outputs.reservation }}" \
+            $ARGS $WARM \
+            ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}
+
+      - name: Commit the budget artifact
+        if: always() && steps.plan.outputs.engage == 'true'
+        run: |
+          git config user.name  "prahari-keepalive"
+          git config user.email "keepalive@users.noreply.github.com"
+          git add .github/keepalive-budget.json
+          git diff --staged --quiet && { echo "budget unchanged"; exit 0; }
+          git commit -m "chore(keepalive): settle segment [skip ci]"
+          # The successor segment has been running for hours by now and may
+          # have pushed first; rebase rather than fail, and never force.
+          for i in 1 2 3; do
+            git pull --rebase --autostash origin "${{ github.ref_name }}" && git push && exit 0
+            echo "push attempt $i failed; retrying"
+            sleep 5
+          done
+          echo "::warning::could not push the budget artifact"
 
       - name: Raise an issue after three consecutive failures
         # Silent keep-alive failure on demo morning is the exact scenario this
         # phase exists to prevent, so a repeated failure is LOUD.
-        if: steps.ping.outputs.failures != ''
+        if: steps.run.outputs.failures != ''
         uses: actions/github-script@v7
         with:
           script: |
-            const failed = '${{ steps.ping.outputs.failures }}'.trim();
+            const failed = '${{ steps.run.outputs.failures }}'.trim();
             const title = 'keep-alive: a target is not answering';
             const { data: open } = await github.rest.issues.listForRepo({
               owner: context.repo.owner, repo: context.repo.repo,
@@ -175,7 +247,8 @@ jobs:
               `Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
               '',
               'A cold start is a slow 200 and is NOT counted as a failure, so this',
-              'means the target answered with an error or not at all.',
+              'means the target answered with an error, or not at all, three ticks',
+              'in a row.',
             ].join('\n');
             if (open.length) {
               await github.rest.issues.createComment({
@@ -193,10 +266,14 @@ jobs:
         if: always()
         run: |
           {
-            echo "### keep-alive"
+            echo "### keep-alive segment"
             echo ""
-            echo "- decision: \`${{ steps.guard.outputs.should_ping }}\`"
-            echo "- reason: ${{ steps.guard.outputs.reason }}"
-            echo "- budget used: ${{ steps.guard.outputs.used_pct }}% of a ${{ env.FREE_HOURS_POOL }}h pool shared by ${{ env.KEPT_WARM }} kept-warm services"
-            echo "- window: ${{ env.WINDOW_START }}:00–${{ env.WINDOW_END }}:00 UTC"
+            echo "- engaged: \`${{ steps.plan.outputs.engage }}\` (window opens in ${{ steps.plan.outputs.opens_in_s }}s)"
+            echo "- ticks that pinged: \`${{ steps.run.outputs.ticks }}\`"
+            echo "- last decision: ${{ steps.run.outputs.reason }}"
+            echo "- caches warmed: \`${{ steps.run.outputs.warmed }}\`"
+            echo "- failing targets: \`${{ steps.run.outputs.failures }}\`"
+            echo "- window: ${{ env.WINDOW_START }}:00–${{ env.WINDOW_END }}:00 UTC, "
+            echo "  segment ${{ env.SEGMENT_MINUTES }} min, tick ${{ env.TICK_SECONDS }}s"
+            echo "- pool: ${{ env.FREE_HOURS_POOL }}h shared by ${{ env.KEPT_WARM }} kept-warm services"
           } >> "$GITHUB_STEP_SUMMARY"
