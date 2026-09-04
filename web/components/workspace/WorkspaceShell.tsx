@@ -30,7 +30,7 @@ import Footer from "../system/Footer";
  */
 
 const NAV = [
-  { href: "/workbench", label: "Overview", icon: LayoutDashboard, exact: true },
+  { href: "/workbench/overview", label: "Overview", icon: LayoutDashboard, exact: true },
   { href: "/workbench/actors", label: "Actors", icon: Users },
   { href: "/workbench/compare", label: "Compare", icon: GitCompare },
   { href: "/workbench/tor", label: "Tor timing", icon: Waypoints },
@@ -102,7 +102,9 @@ export default function WorkspaceShell({ children }: { children: React.ReactNode
   /**
    * The classic cockpit renders its own Header and owns the full viewport, so
    * it is NOT wrapped in the workspace chrome -- that would give it two headers
-   * and a nested scroll container.
+   * and a nested scroll container. It lives at `/workbench` itself now, because
+   * it is the default landing; the routed workspace starts at
+   * `/workbench/overview`.
    *
    * It does still get the slim footer (DEC-063). The gate is "a footer on every
    * page", and the root instance stands down for anything under /workbench, so
@@ -110,7 +112,7 @@ export default function WorkspaceShell({ children }: { children: React.ReactNode
    * footer at all. One line under an h-screen cockpit is the smallest change
    * that satisfies it.
    */
-  if (pathname === "/workbench/classic") {
+  if (pathname === "/workbench") {
     return (
       <div className="flex h-screen flex-col overflow-hidden">
         <div className="min-h-0 flex-1">{children}</div>
@@ -262,9 +264,9 @@ export default function WorkspaceShell({ children }: { children: React.ReactNode
 
           <span className="flex-1" />
           <Link
-            href="/workbench/classic"
+            href="/workbench"
             className="mono flex items-center gap-2 rounded-[var(--radius)] px-2 py-2 text-[9px] uppercase tracking-[0.1em] text-[var(--muted-2)] transition hover:text-[var(--muted)]"
-            title="The original single-page cockpit"
+            title="Back to the classic single-page cockpit"
           >
             <LayoutDashboard className="h-3.5 w-3.5 shrink-0" />
             <span className="hidden lg:inline">Classic</span>

@@ -18,7 +18,7 @@ const BASE = process.env.BASE_URL ?? "http://localhost:3000";
 const ROUTES = [
   "/", "/about", "/docs", "/login",
   "/workbench", "/workbench/actors", "/workbench/compare", "/workbench/tor",
-  "/workbench/case/CASE-001", "/workbench/classic",
+  "/workbench/case/CASE-001", "/workbench/overview",
   "/workbench/actor/actor-009",
   "/workbench/actor/actor-009/graph",
   "/workbench/actor/actor-009/evidence",

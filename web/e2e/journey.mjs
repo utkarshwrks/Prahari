@@ -102,18 +102,28 @@ const run = async () => {
    * Which build is this?
    *
    * NEXT_PUBLIC_FF_WORKSPACE is inlined at build time, so the journey cannot
-   * read it -- it asks the page instead. With the flag on, /workbench is the
-   * Overview and the cockpit lives at /workbench/classic; with it off, a
-   * rewrite serves the cockpit at /workbench itself.
+   * read it -- it asks the page instead. Either way /workbench is the classic
+   * cockpit; what the flag decides is whether the routed workspace exists
+   * alongside it at /workbench/overview and the rest.
    *
    * Detecting rather than assuming means this file is a real gate for BOTH
    * builds. Assuming the flag was on is exactly how the flag-off rewrite bug
    * survived its first run.
    */
+  // Probe /workbench/overview, NOT /workbench. The cockpit is the landing page
+  // in both builds now, so /workbench never carries the workspace rail and
+  // asking it would report the flag OFF on every build -- which silently skips
+  // every routed-workspace check below and turns this file back into the dead
+  // test its own header warns about.
+  await page.goto(`${BASE}/workbench/overview`, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(1500);
   const WORKSPACE = await page.evaluate(
     () => document.querySelector('nav[aria-label="Workspace"]') !== null
   );
-  const COCKPIT = WORKSPACE ? "/workbench/classic" : "/workbench";
+  // The classic cockpit is what /workbench renders in BOTH builds: with the
+  // flag off it always was, and with the flag on it is now the default landing
+  // rather than the escape hatch.
+  const COCKPIT = "/workbench";
   console.log(`  ---   workspace flag: ${WORKSPACE ? "ON" : "OFF"} · cockpit at ${COCKPIT}`);
 
   // The cockpit checks below are about the single-page cockpit specifically,
@@ -249,7 +259,7 @@ const run = async () => {
   }
 
   const WORKSPACE_ROUTES = WORKSPACE ? [
-    ["/workbench", /OVERVIEW|TRIAGE|Strong case/i, "Overview"],
+    ["/workbench/overview", /OVERVIEW|TRIAGE|Strong case/i, "Overview"],
     ["/workbench/actors", /Search actors/i, "Actor list"],
     ["/workbench/compare", /Compare two actors/i, "Compare"],
     ["/workbench/tor", /TOR|timing/i, "Tor timing lab"],
@@ -259,7 +269,9 @@ const run = async () => {
     ["/workbench/actor/actor-088/evidence", /nightowl1/i, "Evidence trail"],
     ["/workbench/actor/actor-088/timeline", /nightowl1/i, "Timeline"],
     ["/workbench/actor/actor-088/chain", /nightowl1/i, "Chain flow"],
-    ["/workbench/classic", /ACTORS|resolved/i, "Classic cockpit"],
+    // Still checked: it is a redirect to /workbench now, and a redirect that
+    // stopped forwarding would silently strand every old bookmark.
+    ["/workbench/classic", /ACTORS|resolved/i, "Classic cockpit (redirected)"],
   ] : [];
 
   const wsErrors = [];
@@ -323,7 +335,10 @@ const run = async () => {
 
   // Command palette: Cmd-K, and the DEC-042 focus trap it restores (FINDING-07).
   console.log("\n== COMMAND PALETTE / FOCUS TRAP (FINDING-07) ==");
-  await page.goto(`${BASE}/workbench`, { waitUntil: "domcontentloaded" });
+  // The palette belongs to the workspace shell, and the shell does not wrap the
+  // classic cockpit -- which is what /workbench renders. Drive a routed view,
+  // or every check below fails on a page that was never meant to have one.
+  await page.goto(`${BASE}/workbench/overview`, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(4000);
   const dialogsBefore = await page.locator('[role="dialog"]').count();
   await page.keyboard.press("Control+k");
@@ -447,7 +462,7 @@ const run = async () => {
   const FOOTER_ROUTES = [
     ["/", "full"], ["/about", "full"], ["/docs", "full"],
     ["/workbench", "slim"], ["/workbench/actors", "slim"],
-    ["/workbench/classic", "slim"], ["/sangam", "slim"], ["/command", "slim"],
+    ["/workbench/overview", "slim"], ["/sangam", "slim"], ["/command", "slim"],
   ];
 
   const missing = [];

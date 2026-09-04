@@ -36,12 +36,12 @@ type Item = {
 };
 
 const ROUTES: Item[] = [
-  { id: "r:overview", label: "Overview", hint: "Triage dashboard", href: "/workbench" },
+  { id: "r:overview", label: "Overview", hint: "Triage dashboard", href: "/workbench/overview" },
   { id: "r:actors", label: "Actors", hint: "Full actor list", href: "/workbench/actors" },
   { id: "r:compare", label: "Compare", hint: "Two actors side by side", href: "/workbench/compare" },
   { id: "r:tor", label: "Tor timing lab", hint: "Experiments", href: "/workbench/tor" },
   { id: "r:case", label: "Case ledger", hint: "CASE-001", href: "/workbench/case/CASE-001" },
-  { id: "r:classic", label: "Classic cockpit", hint: "The original single page", href: "/workbench/classic" },
+  { id: "r:classic", label: "Classic cockpit", hint: "The default single page", href: "/workbench" },
   { id: "r:sangam", label: "SANGAM", hint: "WHO x WHERE map", href: "/sangam" },
 ];
 

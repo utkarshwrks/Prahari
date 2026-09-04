@@ -1,15 +1,12 @@
-import Workbench from "@/components/workbench/Workbench";
-
-export const metadata = { title: "Classic cockpit — PRAHARI" };
+import { redirect } from "next/navigation";
 
 /**
- * The original single-page cockpit, unchanged and always reachable.
+ * Kept as a redirect, not deleted.
  *
- * DEC-056 splits the workbench into ten routes; some analysts will prefer the
- * one-screen view, and the Phase 0 visual baseline is a picture of this page.
- * It is not a legacy stub -- it renders the same component /workbench does with
- * the flag off.
+ * The classic cockpit now lives at `/workbench` itself. This path was linked
+ * from the rail, the command palette and anything an analyst bookmarked while
+ * it was the escape hatch, so it forwards rather than 404s.
  */
 export default function Page() {
-  return <Workbench />;
+  redirect("/workbench");
 }

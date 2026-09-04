@@ -14,7 +14,8 @@ import { ChevronRight } from "lucide-react";
  */
 
 const LABELS: Record<string, string> = {
-  workbench: "Workspace",
+  workbench: "Workbench",
+  overview: "Overview",
   actors: "Actors",
   actor: "Actor",
   compare: "Compare",

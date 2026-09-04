@@ -76,9 +76,20 @@ class TestVerifiedFigures:
         assert env("KEPT_WARM") == U.KEPT_WARM_SERVICES
         assert env("WINDOW_START") == U.WINDOW_START_HOUR
         assert env("WINDOW_END") == U.WINDOW_END_HOUR
-        # And the cron interval matches PING_INTERVAL_MINUTES.
-        cron = re.search(r'cron: "\*/(\d+) ', text)
-        assert cron and int(cron.group(1)) == U.PING_INTERVAL_MINUTES
+
+        # And the tick interval matches PING_INTERVAL_MINUTES.
+        #
+        # It is read from TICK_SECONDS, not from a `*/N` cron: DEC-075 moved the
+        # interval inside a running job because the cron was delivering about 2%
+        # of the runs it asked for. A cron of that shape reappearing would mean
+        # the regression came back, so its ABSENCE is asserted too.
+        assert not re.search(r'cron: "\*/\d+ ', text), (
+            "a high-frequency cron is back; DEC-075 replaced it with a "
+            "self-chaining runner because GitHub does not deliver it"
+        )
+        tick = re.search(r'^  TICK_SECONDS: "(\d+)"', text, re.M)
+        assert tick, "TICK_SECONDS not found in the workflow"
+        assert int(tick.group(1)) == U.PING_INTERVAL_MINUTES * 60
 
     def test_three_free_services_share_the_pool(self):
         # engine, web, and the already-deployed v1.

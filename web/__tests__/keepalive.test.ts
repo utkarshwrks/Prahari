@@ -80,19 +80,48 @@ describe("the verified figures are recorded, not remembered", () => {
 });
 
 describe("the workflow", () => {
-  it("pings every FIVE minutes", () => {
+  it("ticks every FIVE minutes, from inside a run rather than from cron", () => {
     // The interval costs nothing: Render bills hours awake, not requests, so
-    // 5-minute pings keep a service up for exactly the same hours as
-    // 10-minute pings and simply survive more missed runs. GitHub's cron is
-    // best-effort and routinely late; five leaves room for TWO misses against
-    // a 15-minute idle timeout.
-    expect(WORKFLOW).toContain('cron: "*/5');
+    // 5-minute ticks keep a service up for exactly the same hours as 10-minute
+    // ticks and simply survive more missed ones.
+    //
+    // It is a `sleep` inside a running job now, NOT a cron expression, and that
+    // distinction is the whole fix (DEC-075): a */5 cron asked for ~120 runs a
+    // day and GitHub delivered four in two days, so the services slept through
+    // their own window.
+    expect(WORKFLOW).toContain('TICK_SECONDS: "300"');
+    expect(WORKFLOW).toContain('--tick-seconds "$TICK_SECONDS"');
+    // The trigger must NOT be high-frequency again. This is the regression.
+    expect(WORKFLOW).not.toMatch(/cron: "\*\/[0-9]/);
+  });
+
+  it("holds one run for a segment, and chains its own successor", () => {
+    // The chain is what makes the schedule reliable: it needs the scheduler to
+    // work ONCE, not 120 times a day.
+    expect(WORKFLOW).toContain('SEGMENT_MINUTES: "330"');
+    expect(WORKFLOW).toContain("workflows/keepalive.yml/dispatches");
+    expect(WORKFLOW).toContain("actions: write");
+    // 5.5 h of segment must fit inside GitHub's 6 h job ceiling with slack.
+    const timeout = Number(/timeout-minutes: (\d+)/.exec(WORKFLOW)?.[1]);
+    const segment = Number(/SEGMENT_MINUTES: "(\d+)"/.exec(WORKFLOW)?.[1]);
+    expect(segment).toBeLessThan(timeout);
+    expect(timeout).toBeLessThan(360);
+  });
+
+  it("does not hold a runner idle outside the window", () => {
+    // A run landing outside the window exits in seconds and must NOT chain --
+    // chaining there would spin its successor in a tight dispatch loop.
+    expect(WORKFLOW).toContain("steps.plan.outputs.engage == 'true'");
+    expect(WORKFLOW).toContain('LEAD_SECONDS: "1800"');
+    const runner = read("scripts/keepalive_run.py");
+    expect(runner).toContain("window closed; ending the segment");
   });
 
   it("only runs inside the declared ten-hour window", () => {
-    expect(WORKFLOW).toContain("*/5 3,4,5,6,7,8,9,10,11,12 * * *");
     expect(WORKFLOW).toContain('WINDOW_START: "3"');
     expect(WORKFLOW).toContain('WINDOW_END: "13"');
+    // The opener lands inside the lead so the handover is punctual.
+    expect(WORKFLOW).toContain('cron: "50 2 * * *"');
   });
 
   it("declares how many services share the pool, and uses it in the guard", () => {
@@ -111,44 +140,60 @@ describe("the workflow", () => {
     expect(WORKFLOW).toContain("OPT-IN");
   });
 
-  it("warms the engine caches at the top of the window", () => {
+  it("warms the engine caches, but not on every tick", () => {
     // The user-visible complaint was that live data is slow after a sleep.
     // Waking the process is not enough -- its caches are still cold, which is
     // another ~20 s on the first real call.
     expect(WORKFLOW).toContain("/health/warm");
-    expect(WORKFLOW).toContain("Warm the engine caches");
-    // And warming is NOT part of the every-5-minute ping, which must stay cheap.
-    const warmIdx = WORKFLOW.indexOf("Warm the engine caches");
-    const block = WORKFLOW.slice(warmIdx, warmIdx + 1200);
-    expect(block).toContain("ONCE per window opening");
+    expect(WORKFLOW).toContain("--warm-url");
+    // And warming is NOT part of the every-5-minute tick, which must stay
+    // cheap: once per segment, on the first tick that actually pinged.
+    const runner = read("scripts/keepalive_run.py");
+    expect(runner).toContain("Warm ONCE per segment");
+    expect(runner).toContain("not warmed");
   });
 
-  it("refuses to run if the cron and the window disagree", () => {
-    // A schedule that contradicts its own guard burns budget outside the
-    // window it claims to keep.
-    expect(WORKFLOW).toContain("Verify the window and the cron agree");
-    expect(WORKFLOW).toContain("do not match WINDOW_START/END");
+  it("reserves its budget BEFORE pinging, and pushes the claim", () => {
+    // Replaces the old cron/window agreement check, which existed because the
+    // cron defined the window. The guard defines it now, so the invariant worth
+    // protecting is the accounting one: a runner reclaimed mid-segment must
+    // leave a claim that OVERSTATES usage, never one that vanishes.
+    expect(WORKFLOW).toContain("--reserve-minutes");
+    expect(WORKFLOW.indexOf("--reserve-minutes"))
+      .toBeLessThan(WORKFLOW.indexOf("keepalive_run.py"));
+    expect(WORKFLOW).toMatch(/reserve segment/);
   });
 
   it("covers all three services, each with its own toggle", () => {
     for (const v of ["PING_ENGINE", "PING_WEB", "PING_V1"]) {
       expect(WORKFLOW, v).toContain(v);
     }
-    expect(WORKFLOW).toContain("prahari-v2-engine.onrender.com/health/ping");
-    expect(WORKFLOW).toContain("prahari-v2-web.onrender.com/api/health");
+    // The hosts are named once as env vars and the paths appended, so a URL
+    // change happens in one place.
+    expect(WORKFLOW).toContain("prahari-v2-engine.onrender.com");
+    expect(WORKFLOW).toContain("prahari-v2-web.onrender.com");
     expect(WORKFLOW).toContain("prahari-6njh.onrender.com");
+    expect(WORKFLOW).toContain("$ENGINE_URL/health/ping");
+    expect(WORKFLOW).toContain("$WEB_URL/api/health");
   });
 
-  it("consults the guard BEFORE pinging", () => {
-    expect(WORKFLOW.indexOf("Budget guard")).toBeLessThan(WORKFLOW.indexOf("name: Ping"));
-    expect(WORKFLOW).toContain("steps.guard.outputs.should_ping == 'true'");
+  it("consults the guard BEFORE pinging, and again on every tick", () => {
+    expect(WORKFLOW.indexOf("Decide whether to engage at all"))
+      .toBeLessThan(WORKFLOW.indexOf("Run the segment"));
+    // Once at the top is not enough: a 5.5-hour segment would be running on a
+    // decision that went stale hours earlier.
+    const runner = read("scripts/keepalive_run.py");
+    expect(runner).toContain("Re-read the state each tick");
   });
 
   it("treats a slow 200 as success, not as a failure", () => {
     // A cold start is a slow 200. Counting it as a failure would raise an
     // issue every morning for a system working exactly as designed.
-    expect(WORKFLOW).toContain("2*|3*)");
-    expect(WORKFLOW).toContain("cold start is a slow 200");
+    const runner = read("scripts/keepalive_run.py");
+    expect(runner).toContain("200 <= code < 400");
+    expect(runner).toContain("A cold start is a SLOW 200");
+    // And the timeout must exceed Render's ~60 s spin-up with room to spare.
+    expect(runner).toMatch(/--timeout", type=float, default=9[0-9]/);
   });
 
   it("raises a GitHub issue when a target genuinely fails", () => {
@@ -159,7 +204,7 @@ describe("the workflow", () => {
   it("supports a dry run through workflow_dispatch", () => {
     expect(WORKFLOW).toContain("workflow_dispatch");
     expect(WORKFLOW).toContain("dry_run");
-    expect(WORKFLOW).toContain("github.event.inputs.dry_run != 'true'");
+    expect(WORKFLOW).toContain("github.event.inputs.dry_run == 'true'");
   });
 
   it("costs nothing: a GitHub cron, no server", () => {
