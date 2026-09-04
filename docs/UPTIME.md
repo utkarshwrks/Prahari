@@ -1,8 +1,14 @@
 # UPTIME — keeping three free services warm without exceeding the free tier
 
-**DEC-064, DEC-065.** Written from figures verified against Render's live
-documentation on **2026-09-03**, not from memory and not from the playbook's
-assumptions.
+**DEC-064, DEC-065, DEC-075.** Written from figures verified against Render's
+live documentation on **2026-09-03**, not from memory and not from the
+playbook's assumptions.
+
+> **2026-09-04 — the schedule was rebuilt.** The window and the guard below were
+> right; the trigger under them was not. A `*/5` cron asked for ~120 runs a day
+> and GitHub delivered **four in two days**, so the services slept through their
+> own window. The mechanism is now a self-chaining runner, not a cron. See
+> section 2c and DEC-075.
 
 ---
 
@@ -97,11 +103,10 @@ to match, to put it back.
 
 **Five minutes**, against a fifteen-minute timeout.
 
-The interval is free (see above), so it is chosen purely for reliability. At ten
-minutes, one skipped run leaves a 20-minute gap and the service sleeps; GitHub's
-scheduled workflows are explicitly best-effort and are routinely delayed by
-several minutes under load. At five minutes, **two** consecutive runs can be
-missed entirely and the service still stays up.
+The interval is free (see above), so it is chosen purely for reliability. It is
+now a `sleep` inside a running job rather than a cron expression, so it is
+delivered exactly — see 2c for why that distinction turned out to be the whole
+problem.
 
 ---
 
@@ -121,7 +126,8 @@ The keep-alive ping deliberately fixes only the first. `GET /health/ping` must
 stay under 50 ms and touch nothing, so it cannot warm anything — a ping that
 rebuilt caches every five minutes would burn CPU continuously for no benefit.
 
-So the workflow calls `POST /health/warm` **once, at the top of the window**.
+So the runner calls `POST /health/warm` **once per segment, on the first tick
+that actually pinged**.
 That builds all three caches before any human arrives, which is what makes the
 first request of the day as fast as a local run.
 
@@ -134,6 +140,51 @@ while the product felt slow. See DEC-066.
 
 ---
 
+## 2c. Why the trigger is not a cron (DEC-075)
+
+**The window and the guard were correct, and the services still slept.** The
+`*/5` cron that drove them asked for about 120 runs a day. GitHub delivered
+this:
+
+```
+2026-09-04T07:37:45Z  schedule  success
+2026-09-03T16:29:23Z  schedule  success
+2026-09-03T12:15:03Z  schedule  success
+2026-09-03T07:39:10Z  schedule  success
+```
+
+**Four runs in two days, against 240 requested.** GitHub documents `schedule` as
+best-effort and drops high-frequency crons under load. A ping every four to nine
+hours does nothing against a fifteen-minute idle timer, so the "warm window" was
+warm for about ten minutes of it. A probe of `/health/ping` at 08:45 UTC —
+mid-window — took **67 seconds**, because it cold-started the engine itself.
+
+### What replaced it
+
+One run holds a job for a **5.5-hour segment**, ticking every five minutes from
+inside it, and dispatches its successor before it begins. The chain needs the
+scheduler to work **once**, not 120 times a day; `workflow_dispatch` fired with
+`GITHUB_TOKEN` is one of the two events GitHub permits to start a new run. The
+remaining crons are a way back in, not the mechanism:
+
+| Cron | Purpose |
+|---|---|
+| `50 2 * * *` | Opens the day. Lands inside the 30-minute engage lead, sleeps to 03:00, starts ticking on the window. |
+| `9 * * * *` | Recovers a chain broken mid-window. Off the hour, which is GitHub's most congested slot. |
+
+This costs nothing because the repository is **public**: standard runners are
+free and unmetered. The scarce resource is unchanged — Render's 750 hours — and
+every tick still asks the guard.
+
+### A runner is never held to do nothing
+
+A run landing outside the window **exits in seconds and does not chain**. If it
+chained, its successor would start immediately, exit immediately and dispatch
+again in a tight loop. A segment that outlives the window ends at the close
+rather than idling to its deadline. Idling a runner through the fourteen shut
+hours would be both wasteful and the least defensible part of this design under
+Actions' acceptable use.
+
 ---
 
 ## 3. What runs
@@ -142,8 +193,10 @@ while the product felt slow. See DEC-066.
 |---|---|---|
 | `GET /health/ping` | engine | Touches **no** database, no Neo4j, no external API. Reports uptime, pings in 24 h, budget used, next window. Logged at DEBUG. |
 | `GET /api/health` | web | Static. `?deep=1` optionally proxies the engine's ping. |
-| `.github/workflows/keepalive.yml` | GitHub Actions | Cron `*/10 4-10 UTC`. Free for public repositories, so no server and no cost. |
+| `.github/workflows/keepalive.yml` | GitHub Actions | Self-chaining 5.5 h segments, 5-minute ticks. Two low-frequency crons as a way back in. Free for public repositories, so no server and no cost. |
+| `scripts/keepalive_run.py` | the workflow | The runner. Holds the segment, ticks, warms once, settles the budget. |
 | `scripts/keepalive_budget.py` | the workflow | The guard. Stdlib-only, runs before any dependency install. |
+| `scripts/test_keepalive.py` | CI | 23 stdlib tests over the guard's fail-closed directions. |
 | `.github/keepalive-budget.json` | the repository | The committed estimate of what has been spent. |
 | `scripts/warmup.sh` / `npm run warmup` | a laptop | Pre-demo: wakes all three, polls until each answers, prints measured cold-start times, warms the engine caches. |
 
@@ -158,9 +211,14 @@ while the product felt slow. See DEC-066.
   guard returned an empty state for both cases, so a corrupt file made it
   believe nothing had been spent and ping freely. That is failing *open*, which
   is the one direction this guard must never fail in.
-- **The workflow refuses to run if the cron hours and the configured window
-  disagree.** A schedule that contradicts its own guard burns budget outside
-  the window it claims to keep.
+- **A segment reserves its budget up front and pushes the claim before it
+  pings**, then settles it to the real value when it finishes. A runner
+  reclaimed mid-segment therefore leaves a claim that **overstates** usage. A
+  lost claim would understate it, and understating is what lets the next segment
+  sail past a pool whose exhaustion suspends the services.
+- **Awake time is a union, not a sum.** A month can hold both legacy per-ping
+  timestamps and segment intervals; billing an overlap twice would narrow the
+  window for no reason.
 
 ### Failure is loud
 
