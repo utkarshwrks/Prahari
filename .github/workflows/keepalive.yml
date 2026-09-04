@@ -63,9 +63,12 @@ on:
     # 02:50 UTC opens the day: it lands inside the 30-minute lead, so the runner
     # engages, sleeps to 03:00 and starts ticking exactly on the window.
     - cron: "50 2 * * *"
-    # Hourly at :09, to recover a chain that broke mid-window. Off the hour on
-    # purpose -- :00 is the most congested slot GitHub has.
-    - cron: "9 * * * *"
+    # Twice an hour, to recover a chain that broke. MEASURED, not assumed:
+    # GitHub dropped the 09:09 slot on the day this was written, so a single
+    # daily opener is not enough on its own -- each of these is an independent
+    # chance to re-ignite, and out-of-window ones exit in seconds and cost
+    # nothing. Off the hour on purpose: :00 is GitHub's most congested slot.
+    - cron: "9,39 * * * *"
   workflow_dispatch:
     inputs:
       dry_run:
