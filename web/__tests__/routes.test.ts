@@ -18,6 +18,8 @@ import { join } from "node:path";
 const ROOT = process.cwd();
 const app = (p: string) => join(ROOT, "app", p);
 const read = (p: string) => readFileSync(app(p), "utf8");
+/** Read outside app/, for components the routes are asserted against. */
+const readSrc = (p: string) => readFileSync(join(ROOT, p), "utf8");
 
 /** The ten routes the phase promises, plus the legacy cockpit. */
 const ROUTES: [string, string][] = [
@@ -71,8 +73,30 @@ describe("nothing was removed (the prime directive)", () => {
   });
 
   it("the classic cockpit renders the same component the cockpit always did", () => {
+    // It moved to /workbench itself, because it is the default landing again:
+    // DEC-056 made the routed dashboard the default, and that inverted what
+    // most analysts want on arrival. The component is unchanged -- the prime
+    // directive is additive only, and this test is what proves nothing was
+    // swapped out underneath the move.
+    const cockpit = read("workbench/page.tsx");
+    expect(cockpit).toContain("@/components/workbench/Workbench");
+  });
+
+  it("the routed workspace dashboard kept a route of its own", () => {
+    // Making the cockpit the default must not withdraw the workspace. It is
+    // one click from the cockpit header, not deleted.
+    const overview = read("workbench/overview/page.tsx");
+    expect(overview).toContain("@/components/workspace/Overview");
+    const header = readSrc("components/workbench/Header.tsx");
+    expect(header).toContain("/workbench/overview");
+  });
+
+  it("the old /workbench/classic path still forwards rather than 404ing", () => {
+    // It was linked from the rail, the palette and anything bookmarked while it
+    // was the escape hatch.
     const classic = read("workbench/classic/page.tsx");
-    expect(classic).toContain("@/components/workbench/Workbench");
+    expect(classic).toContain("redirect");
+    expect(classic).toContain('"/workbench"');
   });
 
   it("the workspace REUSES the legacy panels rather than reimplementing them", () => {

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { signOut, useSession } from "next-auth/react";
-import { Activity, LogOut } from "lucide-react";
+import { Activity, LayoutDashboard, LogOut } from "lucide-react";
 import { api, type EvalMetrics, type SourcesResult } from "@/lib/api";
 import Logo from "../ui/Logo";
 
@@ -63,6 +63,18 @@ export default function Header() {
       </div>
 
       <div className="flex items-center gap-3">
+        {/*
+          The way INTO the routed workspace (DEC-056). The cockpit is what
+          /workbench renders, so without this button the ten routed views would
+          be reachable only by typing a URL -- the rail's "Classic" link is the
+          mirror of this one, and an escape hatch that only opens one way is a
+          dead end.
+        */}
+        <a href="/workbench/overview" title="Workspace — the routed triage dashboard"
+          className="mono hidden items-center gap-1 border border-[var(--border-2)] px-2 py-1 text-[9px] uppercase tracking-[0.14em] text-[var(--muted)] transition hover:border-[var(--accent-dim)] hover:text-[var(--c-high)] sm:inline-flex">
+          <LayoutDashboard className="h-3 w-3" />
+          Workspace
+        </a>
         <a href="/sangam" title="Sangam — WHO x WHERE map"
           className="mono hidden items-center gap-1 border border-[var(--border-2)] px-2 py-1 text-[9px] uppercase tracking-[0.14em] text-[var(--muted)] transition hover:border-[var(--accent-dim)] hover:text-[var(--c-high)] sm:inline-flex">
           Sangam
