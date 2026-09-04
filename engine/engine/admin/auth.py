@@ -87,7 +87,13 @@ def service_secret() -> str:
     configured = (os.getenv("ENGINE_SERVICE_SECRET") or "").strip()
     if configured:
         return configured
-    if os.getenv("ENGINE_ENV", "").lower() == "production":
+    # ENGINE_ENV *or* ENVIRONMENT. The refusal is the only thing standing
+    # between a public deployment and a KNOWN admin signing key, and it was
+    # armed by a variable nothing set: render.yaml sets ENVIRONMENT, settings.py
+    # reads `environment`, and this line alone read ENGINE_ENV. A guard whose
+    # trigger no deployment pulls is not a guard.
+    env = (os.getenv("ENGINE_ENV") or os.getenv("ENVIRONMENT") or "").strip().lower()
+    if env in {"production", "prod"}:
         raise RuntimeError(
             "PRAHARI engine refuses to serve /admin in production without "
             "ENGINE_SERVICE_SECRET. Set the same value on both services."

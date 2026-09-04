@@ -269,9 +269,6 @@ const run = async () => {
     ["/workbench/actor/actor-088/evidence", /nightowl1/i, "Evidence trail"],
     ["/workbench/actor/actor-088/timeline", /nightowl1/i, "Timeline"],
     ["/workbench/actor/actor-088/chain", /nightowl1/i, "Chain flow"],
-    // Still checked: it is a redirect to /workbench now, and a redirect that
-    // stopped forwarding would silently strand every old bookmark.
-    ["/workbench/classic", /ACTORS|resolved/i, "Classic cockpit (redirected)"],
   ] : [];
 
   const wsErrors = [];
@@ -286,6 +283,18 @@ const run = async () => {
   if (WORKSPACE) {
     log("no client-side exception on any workspace route", wsErrors.length === 0,
         wsErrors.slice(0, 2).join(" | "));
+
+    // The old cockpit path is a REDIRECT now, so it is checked as one rather
+    // than as a 200 -- and it is checked at all because a redirect that stopped
+    // forwarding would silently strand every bookmark made while it was the
+    // escape hatch. It is also the loop detector: /workbench once rewrote to
+    // this path, which redirects back, and a flag-off build spun 173,751 times.
+    await page.goto(`${BASE}/workbench/classic`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(6000);
+    const landed = new URL(page.url()).pathname;
+    const t = await page.evaluate(() => document.body.innerText);
+    log("the old /workbench/classic path still forwards to the cockpit",
+        landed === "/workbench" && /ACTORS|resolved/i.test(t), landed);
   }
 
   if (WORKSPACE) {
