@@ -27,10 +27,24 @@ services:
       # engine refuse to serve /admin at all.
       - key: ENGINE_SERVICE_SECRET
         generateValue: true
+      # Chain: the live PrahariAnchor on Ethereum Sepolia, verified source at
+      # sepolia.etherscan.io/address/0x861837efbC1E47B64a55B1eAF1D01614eEB98f81
+      #
+      # These two were pinned to Polygon Amoy, whose public RPC no longer
+      # resolves. Because a Blueprint sync rewrites what the dashboard holds,
+      # leaving them here would silently revert a working Sepolia deploy back
+      # to a dead endpoint and turn every seal into "Anchoring failed".
       - key: RPC_URL
-        value: https://rpc-amoy.polygon.technology
+        value: https://ethereum-sepolia-rpc.publicnode.com
       - key: CHAIN_ID
-        value: "80002"
+        value: "11155111"
+      - key: CONTRACT_ADDR
+        value: "0x861837efbC1E47B64a55B1eAF1D01614eEB98f81"
+      # ANCHORER_KEY and ETHERSCAN_API_KEY are deliberately ABSENT.
+      # This file is committed; a funded signing key in it is a key on GitHub.
+      # Set both in the Render dashboard (Environment -> Add from .env).
+      # Without ANCHORER_KEY the engine degrades honestly: the hash chain and
+      # Merkle roots still compute and verify, sealing reports NOT CONFIGURED.
       - key: CORS_ORIGINS
         value: "*"
 
