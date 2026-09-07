@@ -68,12 +68,38 @@ const loginOn = (page) => login(page);
 
 async function login(page) {
   await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
+
+  /**
+   * WAIT FOR HYDRATION BEFORE CLICKING.
+   *
+   * LoginForm submits through React's onSubmit, which does not exist until the
+   * bundle has arrived and hydrated. Clicking before then does a native GET
+   * submit back to /login -- the page reloads and no error is shown, so the
+   * journey saw only `waitForURL: Timeout` and read as a broken harness.
+   *
+   * Against a local dev server the bundle is there before Playwright can click
+   * and this never fired. Against the deployed free instance it fired EVERY
+   * run, which is the whole reason this journey points at a real deployment.
+   *
+   * The form now disables its button until hydrated, so waiting for it to be
+   * enabled waits for exactly the right thing rather than for a fixed sleep.
+   */
+  const submit = page.locator('button[type="submit"]');
+  await submit.waitFor({ state: "visible", timeout: 45000 });
+  await page.waitForFunction(
+    () => {
+      const b = document.querySelector('button[type="submit"]');
+      return b && !b.disabled;
+    },
+    { timeout: 45000 }
+  );
+
   await page.fill('input[type="email"]', EMAIL);
   await page.fill('input[type="password"]', PASSWORD);
   await Promise.all([
     // LoginForm does a hard navigation to /workbench, not a router push.
     page.waitForURL("**/workbench", { timeout: 45000 }),
-    page.click('button[type="submit"]'),
+    submit.click(),
   ]);
 }
 

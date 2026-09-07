@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowLeft, Fingerprint, Lock, Radar } from "lucide-react";
 import Logo from "@/components/ui/Logo";
 import LoginForm from "@/components/auth/LoginForm";
+import { DEMO_ACCOUNT_ENABLED } from "@/lib/authConfig";
 import GlobeStage from "@/components/three/GlobeStage";
 
 export const metadata = { title: "Sign in — PRAHARI" };
@@ -42,7 +43,7 @@ export default function Page() {
           </p>
 
           <div className="glass mt-7 p-6">
-            <LoginForm />
+            <LoginForm demoEnabled={DEMO_ACCOUNT_ENABLED} />
           </div>
 
           <dl className="mt-6 grid grid-cols-3 gap-2">
