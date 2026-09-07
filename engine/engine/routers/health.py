@@ -18,6 +18,47 @@ router = APIRouter(tags=["meta"])
 
 log = logging.getLogger(__name__)
 
+def _database_check() -> dict[str, object]:
+    """The database check, with the context that makes it readable.
+
+    `ok` and `error` keep their exact meaning and are passed through
+    untouched, because the workbench and the failure drill both key off them.
+    What is added is WHY, which is the part a reader was previously left to
+    infer from a raw psycopg traceback.
+
+    A judge opening /health on the free deployment used to see a bare
+    "connection refused" and reasonably conclude the service was broken. It
+    was not: no Postgres is attached there, and nothing on the demo path needs
+    one. An unexplained failing check is a false alarm, and a status endpoint
+    that cries wolf is worse than one that says nothing.
+    """
+    s = get_settings()
+    ok, err = ping()
+    configured = s.database_configured
+    check: dict[str, object] = {"ok": ok, "error": err, "configured": configured}
+
+    if ok:
+        check["detail"] = "Postgres reachable."
+    elif not configured:
+        # Expected, not broken. Say which surface degrades, and no more.
+        check["required"] = False
+        check["detail"] = (
+            "No DATABASE_URL set, so no Postgres is attached to this "
+            "deployment. This is expected here, not a fault: only /sources "
+            "reads Postgres. Attribution, the audit ledger, Merkle sealing, "
+            "on-chain anchoring, the graph and the Tor demo all run without "
+            "it."
+        )
+    else:
+        # DATABASE_URL IS set and the database is down. A real problem.
+        check["required"] = True
+        check["detail"] = (
+            "DATABASE_URL is set but Postgres is unreachable. /sources will "
+            "degrade; everything else keeps serving (INV-9)."
+        )
+    return check
+
+
 #: Process start, captured at import. Uptime is measured, not guessed.
 _STARTED_AT = time.time()
 _STARTED_ISO = datetime.now(timezone.utc).isoformat()
@@ -26,7 +67,6 @@ _STARTED_ISO = datetime.now(timezone.utc).isoformat()
 @router.get("/health")
 def health() -> dict[str, object]:
     s = get_settings()
-    db_ok, db_err = ping()
     # Deliberately still 200 when Postgres is down: the engine IS up, and the
     # workbench needs to distinguish "engine offline" from "database offline"
     # to degrade honestly. The body carries the truth.
@@ -35,7 +75,7 @@ def health() -> dict[str, object]:
         "service": s.app_name,
         "version": s.version,
         "environment": s.environment,
-        "checks": {"database": {"ok": db_ok, "error": db_err}},
+        "checks": {"database": _database_check()},
         "scheduler": scheduler_status(),
     }
 
@@ -149,7 +189,6 @@ def diagnostics() -> dict[str, object]:
         verdict = "warm"
         detail = "Caches are built. Requests should be as fast as a local run."
 
-    db_ok, db_err = ping()
     return {
         "ok": True,
         "verdict": verdict,
@@ -160,7 +199,7 @@ def diagnostics() -> dict[str, object]:
         "dependencies": {
             # A dependency being down does NOT make the engine down (INV-9),
             # but it does explain which panels will degrade.
-            "database": {"ok": db_ok, "error": db_err},
+            "database": _database_check(),
         },
         "keepalive": budget_state(now),
     }

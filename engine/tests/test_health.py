@@ -106,3 +106,52 @@ def test_unknown_route_is_json_not_html():
         r = c.get("/no-such-endpoint")
     assert r.status_code == 404
     assert r.headers["content-type"].startswith("application/json")
+
+
+def test_unconfigured_database_is_reported_as_expected_not_broken(monkeypatch):
+    """No DATABASE_URL is a deployment fact, not an incident.
+
+    On the free Render plan no Postgres is attached, and only /sources reads
+    one. Reporting that as a bare OperationalError made a healthy engine look
+    broken to anyone who opened /health, so the check now says which surface
+    degrades and that nothing on the demo path does.
+    """
+    monkeypatch.setattr("engine.routers.health.ping", lambda: (False, "ConnectionRefused"))
+    with client() as c:
+        db = c.get("/health").json()["checks"]["database"]
+    assert db["ok"] is False            # still the truth
+    assert db["error"] == "ConnectionRefused"   # still passed through verbatim
+    assert db["configured"] is False
+    assert db["required"] is False
+    assert "only /sources" in db["detail"].lower()
+
+
+def test_configured_but_unreachable_database_is_still_a_real_problem(monkeypatch):
+    """The inverse case must NOT be softened.
+
+    If somebody set DATABASE_URL and Postgres is down, that is an outage and
+    has to read as one. A check that calls every failure expected would be
+    just as useless as one that calls every failure fatal.
+    """
+    from engine import settings as S
+
+    monkeypatch.setattr("engine.routers.health.ping", lambda: (False, "ConnectionRefused"))
+    monkeypatch.setattr(S.Settings, "database_configured", property(lambda self: True))
+    S.get_settings.cache_clear()
+    try:
+        with client() as c:
+            db = c.get("/health").json()["checks"]["database"]
+        assert db["ok"] is False
+        assert db["configured"] is True
+        assert db["required"] is True
+        assert "unreachable" in db["detail"].lower()
+    finally:
+        S.get_settings.cache_clear()
+
+
+def test_version_reports_database_capability():
+    with client() as c:
+        caps = c.get("/version").json()["capabilities"]
+    assert "database" in caps
+    assert isinstance(caps["database"]["enabled"], bool)
+    assert caps["database"]["detail"]

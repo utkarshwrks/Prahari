@@ -15,6 +15,14 @@ from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+#: The docker-compose default, so a fresh clone works with no .env at all.
+#: Hoisted to a constant because `database_configured` needs to distinguish
+#: "nobody set DATABASE_URL" from "DATABASE_URL is set and Postgres is down".
+#: Those are different facts with different fixes, and reporting the first as
+#: the second is what made the production /health look like an outage.
+DEFAULT_DATABASE_URL = "postgresql+psycopg://prahari:prahari@localhost:5432/prahari"
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -31,7 +39,7 @@ class Settings(BaseSettings):
 
     # ---- datastores -----------------------------------------------------
     # Defaults match docker-compose.yml so a fresh clone works with no .env.
-    database_url: str = "postgresql+psycopg://prahari:prahari@localhost:5432/prahari"
+    database_url: str = DEFAULT_DATABASE_URL
     neo4j_uri: str = "bolt://localhost:7687"
     neo4j_user: str = "neo4j"
     neo4j_password: str = "prahari123"
@@ -55,6 +63,20 @@ class Settings(BaseSettings):
 
     # ---- web origin for CORS --------------------------------------------
     cors_origins: str = "http://localhost:3000"
+
+    @property
+    def database_configured(self) -> bool:
+        """Was a Postgres actually provisioned for this deployment?
+
+        False means the default localhost URL is still in place, i.e. nobody
+        pointed the engine at a database. On the Render free plan that is the
+        normal state: no Postgres is attached, and only /sources reads one.
+        Distinguishing this from a real outage matters, because a raw
+        OperationalError on /health reads as a broken service to anyone who
+        opens it -- and the engine is not broken, it is running the deployment
+        it was given.
+        """
+        return self.database_url != DEFAULT_DATABASE_URL
 
     @property
     def cors_origin_list(self) -> list[str]:
@@ -88,6 +110,14 @@ class Settings(BaseSettings):
                 "detail": "Shodan free tier"
                 if self.shodan_api_key
                 else "SHODAN_API_KEY not set - infra pivots run cache-only via crt.sh",
+            },
+            "database": {
+                "enabled": self.database_configured,
+                "detail": "Postgres configured"
+                if self.database_configured
+                else "DATABASE_URL not set - no Postgres for this deployment. "
+                     "Only /sources reads one; attribution, audit, sealing, "
+                     "graph and Tor are unaffected.",
             },
             "anchoring": {
                 "enabled": bool(self.contract_addr and self.anchorer_key),
