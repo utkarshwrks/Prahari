@@ -103,6 +103,28 @@ async function login(page) {
   ]);
 }
 
+/**
+ * The graph lab has finished drawing this view.
+ *
+ * Every check below used to sit behind a fixed `waitForTimeout(3500)` chosen
+ * on a local dev server. On the deployed free instance that expired mid-render
+ * and reported missing legends and captions that render perfectly well a
+ * second later -- and worse, it was FLAKY, so the same commit passed and
+ * failed on consecutive runs. A test that fails on someone else's slower
+ * machine is testing the machine.
+ */
+async function labDrawn(page, timeout = 25000) {
+  return page
+    .waitForFunction(
+      () => {
+        const cap = document.querySelector("[data-testid=view-caption]");
+        return Boolean(cap && (cap.textContent ?? "").trim().length > 60);
+      },
+      { timeout }
+    )
+    .catch(() => {});
+}
+
 /** Click a panel tab by its label. The tabs are plain buttons, not role=tab. */
 async function openPanel(page, label) {
   await page.evaluate((l) => {
@@ -884,12 +906,34 @@ const run = async () => {
     const uncaptioned = [];
     for (const v of KINDS) {
       await page.goto(`${BASE}${GRAPH}?view=${v}`, { waitUntil: "domcontentloaded" });
-      await page.waitForTimeout(v === "sankey" ? 6000 : 3200);
-      const info = await page.evaluate(() => ({
-        caption: document.querySelector("[data-testid=view-caption]")?.textContent?.trim() ?? "",
-        drawn: document.querySelectorAll("svg,canvas,table").length,
-      }));
-      const ok = info.caption.length > 60 && info.drawn > 0;
+
+      /**
+       * WAIT FOR THE VIEW, NOT FOR THE CLOCK.
+       *
+       * These were fixed sleeps of 3.2 s (6 s for sankey), tuned on a local
+       * dev server. Against the deployed free instance `diff` and `dag` had
+       * not finished drawing in time and the run reported them as missing
+       * captions -- a rendering failure that did not exist. Both render fine
+       * given ten seconds.
+       *
+       * A fixed sleep is a guess about someone else's hardware. Polling the
+       * real condition is correct on a fast machine AND a slow one, and still
+       * fails honestly if the view genuinely never draws.
+       */
+      let ok = false;
+      try {
+        await page.waitForFunction(
+          () => {
+            const cap = document.querySelector("[data-testid=view-caption]");
+            const drawn = document.querySelectorAll("svg,canvas,table").length;
+            return Boolean(cap && (cap.textContent ?? "").trim().length > 60 && drawn > 0);
+          },
+          { timeout: 25000 }
+        );
+        ok = true;
+      } catch {
+        ok = false;
+      }
       if (!ok) { allCaptioned = false; uncaptioned.push(v); }
     }
     log("all eleven views render with a caption", allCaptioned, uncaptioned.join(", "));
@@ -898,7 +942,7 @@ const run = async () => {
 
     // The legend and the honesty line are on screen at all times.
     await page.goto(`${BASE}${GRAPH}?view=force2d`, { waitUntil: "domcontentloaded" });
-    await page.waitForTimeout(3500);
+    await labDrawn(page);
     const chrome = await page.evaluate(() => document.body.innerText);
     log("legend names the entity types",
         /Actor \/ PGP/.test(chrome) && /Persona/.test(chrome) && /Infrastructure/.test(chrome));
@@ -910,7 +954,18 @@ const run = async () => {
     // Determinism, observed in the browser: the same URL twice, same geometry.
     const geometry = async () => {
       await page.goto(`${BASE}${GRAPH}?view=force2d`, { waitUntil: "domcontentloaded" });
-      await page.waitForTimeout(3500);
+      await labDrawn(page);
+      // The caption can beat the simulation, so wait for placed nodes too --
+      // comparing two empty layouts would "pass" while proving nothing.
+      await page
+        .waitForFunction(
+          () =>
+            [...document.querySelectorAll("svg g g")].filter((g) =>
+              g.getAttribute("transform")
+            ).length > 0,
+          { timeout: 25000 }
+        )
+        .catch(() => {});
       return page.evaluate(() =>
         [...document.querySelectorAll("svg g g")]
           .map((g) => g.getAttribute("transform"))
@@ -926,7 +981,19 @@ const run = async () => {
     // The evidence DAG reads a real /fusion/pair response.
     const pairId = encodeURIComponent("actor-088-p0|actor-088-p2");
     await page.goto(`${BASE}${GRAPH}?view=dag&pair=${pairId}`, { waitUntil: "domcontentloaded" });
-    await page.waitForTimeout(8000);
+    // The DAG waits on a real /fusion/pair round trip, which is the slowest
+    // call in the lab on a cold free instance. Poll for the finished argument
+    // rather than guessing how long the engine will take.
+    await page
+      .waitForFunction(
+        () => {
+          const t = document.body.innerText;
+          return /SIGNALS/i.test(t) && /ROOTS/i.test(t) &&
+                 /COLLAPSE/i.test(t) && /SCORE/i.test(t) && /Posterior/i.test(t);
+        },
+        { timeout: 30000 }
+      )
+      .catch(() => {});
     const dag = await page.evaluate(() => document.body.innerText);
     log("evidence DAG shows the four stages of the argument",
         /SIGNALS/i.test(dag) && /ROOTS/i.test(dag) && /COLLAPSE/i.test(dag) && /SCORE/i.test(dag));
@@ -954,7 +1021,7 @@ const run = async () => {
       `${BASE}${GRAPH}?view=matrix&roots=infra&min=0.8&inferred=0&weak=0`,
       { waitUntil: "domcontentloaded" }
     );
-    await page.waitForTimeout(3500);
+    await labDrawn(page);
     const deep = await page.evaluate(() => ({
       view: document.body.innerText.includes("ADJACENCY MATRIX"),
       pressedRoot: document.querySelector('[aria-pressed="true"][class*="border-[var(--accent)]"]')?.textContent?.trim(),
